@@ -1,13 +1,13 @@
-import { GameState, Player, Card, GameAction, GameEvent } from '../types/game';
-import { createDeck, shuffleDeck, dealCards, canPlayCard } from '../utils/deck';
+import { GameState, Player, Card, GameAction, GameEvent, House } from '../types/game';
+import { createDeck, shuffleDeck, dealCards, canPlayCard, findHighestCard, calculateScore } from '../utils/deck';
 import { v4 as uuidv4 } from 'uuid';
 
 export class GameManager {
   private games: Map<string, GameState> = new Map();
 
-  createGame(hostName: string, maxPlayers: number = 4): string {
+  createGame(hostName: string, maxPlayers: number = 5): string {
     const gameId = uuidv4();
-    const deck = shuffleDeck(createDeck());
+    const deck = shuffleDeck(createDeck(maxPlayers));
     
     const game: GameState = {
       id: gameId,
@@ -15,16 +15,24 @@ export class GameManager {
         id: uuidv4(),
         name: hostName,
         hand: [],
-        score: 0,
+        score: 15, // Start with 15 points
         isHost: true,
-        isReady: true
+        isReady: true,
+        hasEntered: false,
+        housesBuilt: 0,
+        isDealer: true,
+        isMouth: true
       }],
       currentPlayerIndex: 0,
       deck: deck,
-      discardPile: [],
+      tree: [],
+      trumpCard: null,
       gamePhase: 'waiting',
       roundNumber: 1,
       maxPlayers,
+      currentHouse: [],
+      houses: [],
+      leadSuit: null,
       createdAt: new Date(),
       lastActivity: new Date()
     };
@@ -43,9 +51,13 @@ export class GameManager {
       id: uuidv4(),
       name: playerName,
       hand: [],
-      score: 0,
+      score: 15,
       isHost: false,
-      isReady: false
+      isReady: false,
+      hasEntered: false,
+      housesBuilt: 0,
+      isDealer: false,
+      isMouth: false
     };
 
     game.players.push(player);
@@ -60,22 +72,112 @@ export class GameManager {
       return false;
     }
 
+    // Create deck based on player count
+    const deck = shuffleDeck(createDeck(game.players.length));
+    
     // Deal cards to all players
-    const { hands, remainingDeck } = dealCards(game.deck, game.players.length);
+    const { hands, remainingDeck, trumpCard } = dealCards(deck, game.players.length);
     
     // Assign hands to players
     game.players.forEach((player, index) => {
       player.hand = hands[index];
     });
 
-    // Set up discard pile with one card
-    if (remainingDeck.length > 0) {
-      game.discardPile = [remainingDeck.pop()!];
-    }
-    
+    // Set up game state
     game.deck = remainingDeck;
-    game.gamePhase = 'playing';
+    game.tree = remainingDeck; // All remaining cards go to tree
+    game.trumpCard = trumpCard;
+    game.gamePhase = 'dealing';
     game.currentPlayerIndex = 0;
+    game.lastActivity = new Date();
+
+    return true;
+  }
+
+  enterGame(gameId: string, playerId: string): boolean {
+    const game = this.games.get(gameId);
+    if (!game || game.gamePhase !== 'dealing') {
+      return false;
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) {
+      return false;
+    }
+
+    player.hasEntered = true;
+    game.lastActivity = new Date();
+
+    // Check if all players have decided
+    const allDecided = game.players.every(p => p.hasEntered !== undefined);
+    if (allDecided) {
+      // Auto-enter last two players if others declined
+      const enteredPlayers = game.players.filter(p => p.hasEntered);
+      if (enteredPlayers.length <= 1) {
+        // Last two players must enter
+        const remainingPlayers = game.players.filter(p => !p.hasEntered);
+        remainingPlayers.slice(-2).forEach(p => p.hasEntered = true);
+      }
+      
+      game.gamePhase = 'exchanging';
+    }
+
+    return true;
+  }
+
+  declineGame(gameId: string, playerId: string): boolean {
+    const game = this.games.get(gameId);
+    if (!game || game.gamePhase !== 'dealing') {
+      return false;
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) {
+      return false;
+    }
+
+    player.hasEntered = false;
+    game.lastActivity = new Date();
+
+    // Check if all players have decided
+    const allDecided = game.players.every(p => p.hasEntered !== undefined);
+    if (allDecided) {
+      // Auto-enter last two players if others declined
+      const enteredPlayers = game.players.filter(p => p.hasEntered);
+      if (enteredPlayers.length <= 1) {
+        const remainingPlayers = game.players.filter(p => !p.hasEntered);
+        remainingPlayers.slice(-2).forEach(p => p.hasEntered = true);
+      }
+      
+      game.gamePhase = 'exchanging';
+    }
+
+    return true;
+  }
+
+  exchangeCards(gameId: string, playerId: string, cardIndices: number[]): boolean {
+    const game = this.games.get(gameId);
+    if (!game || game.gamePhase !== 'exchanging') {
+      return false;
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (!player || !player.hasEntered || game.tree.length === 0) {
+      return false;
+    }
+
+    // Exchange cards
+    const cardsToExchange = cardIndices.map(i => player.hand[i]).filter(card => card);
+    const newCards = game.tree.splice(0, cardsToExchange.length);
+    
+    // Remove old cards and add new ones
+    cardIndices.reverse().forEach(i => {
+      if (i >= 0 && i < player.hand.length) {
+        player.hand.splice(i, 1);
+      }
+    });
+    
+    player.hand.push(...newCards);
     game.lastActivity = new Date();
 
     return true;
@@ -88,7 +190,7 @@ export class GameManager {
     }
 
     const player = game.players.find(p => p.id === playerId);
-    if (!player || game.players[game.currentPlayerIndex].id !== playerId) {
+    if (!player || !player.hasEntered || game.players[game.currentPlayerIndex].id !== playerId) {
       return false;
     }
 
@@ -97,59 +199,84 @@ export class GameManager {
     }
 
     const card = player.hand[cardIndex];
-    const topCard = game.discardPile[game.discardPile.length - 1];
+    const trumpSuit = game.trumpCard?.suit || null;
 
-    if (!canPlayCard(card, topCard)) {
+    // Check if card can be played
+    if (!canPlayCard(card, game.leadSuit, trumpSuit, player.hand)) {
       return false;
     }
 
     // Play the card
     player.hand.splice(cardIndex, 1);
-    game.discardPile.push(card);
-    game.lastActivity = new Date();
-
-    // Check if player won
-    if (player.hand.length === 0) {
-      game.gamePhase = 'finished';
-      return true;
+    game.currentHouse.push(card);
+    
+    // Set lead suit if this is the first card
+    if (game.currentHouse.length === 1) {
+      game.leadSuit = card.suit;
     }
 
-    // Move to next player
-    this.nextTurn(game);
+    game.lastActivity = new Date();
+
+    // Check if house is complete
+    if (game.currentHouse.length === game.players.filter(p => p.hasEntered).length) {
+      this.completeHouse(game);
+    } else {
+      // Move to next player
+      this.nextTurn(game);
+    }
+
+    // Check if game is finished
+    if (game.players.every(p => !p.hasEntered || p.hand.length === 0)) {
+      this.endGame(game);
+    }
+
     return true;
   }
 
-  drawCard(gameId: string, playerId: string): boolean {
-    const game = this.games.get(gameId);
-    if (!game || game.gamePhase !== 'playing') {
-      return false;
+  private completeHouse(game: GameState): void {
+    const trumpSuit = game.trumpCard?.suit || null;
+    const highestCard = findHighestCard(game.currentHouse, trumpSuit);
+    const winner = game.players.find(p => 
+      p.hasEntered && p.hand.some(card => 
+        card.suit === highestCard.suit && card.rank === highestCard.rank
+      )
+    );
+
+    if (winner) {
+      winner.housesBuilt++;
+      
+      const house: House = {
+        cards: [...game.currentHouse],
+        winner: winner.id,
+        suit: game.leadSuit!,
+        highestCard
+      };
+      
+      game.houses.push(house);
     }
 
-    const player = game.players.find(p => p.id === playerId);
-    if (!player || game.players[game.currentPlayerIndex].id !== playerId) {
-      return false;
-    }
+    // Reset for next house
+    game.currentHouse = [];
+    game.leadSuit = null;
+    game.currentPlayerIndex = game.players.findIndex(p => p.id === winner?.id) || 0;
+  }
 
-    if (game.deck.length === 0) {
-      // Reshuffle discard pile (except top card)
-      const topCard = game.discardPile.pop()!;
-      game.deck = shuffleDeck(game.discardPile);
-      game.discardPile = [topCard];
-    }
-
-    if (game.deck.length > 0) {
-      const card = game.deck.pop()!;
-      player.hand.push(card);
-      game.lastActivity = new Date();
-    }
-
-    // Move to next player
-    this.nextTurn(game);
-    return true;
+  private endGame(game: GameState): void {
+    game.gamePhase = 'finished';
+    
+    // Calculate final scores
+    game.players.forEach(player => {
+      player.score = calculateScore(player.score, player.housesBuilt, player.hasEntered);
+    });
   }
 
   private nextTurn(game: GameState): void {
-    game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
+    // Find next player who has entered
+    let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
+    while (!game.players[nextIndex].hasEntered) {
+      nextIndex = (nextIndex + 1) % game.players.length;
+    }
+    game.currentPlayerIndex = nextIndex;
   }
 
   getGame(gameId: string): GameState | null {
