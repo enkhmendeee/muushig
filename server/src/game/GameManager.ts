@@ -1,13 +1,12 @@
-import { GameState, Player, Card, GameAction, GameEvent, House } from '../types/game';
+import { GameState, Player, Card, House } from '../types/game';
 import { createDeck, shuffleDeck, dealCards, canPlayCard, findHighestCard, calculateScore } from '../utils/deck';
 import { v4 as uuidv4 } from 'uuid';
 
 export class GameManager {
-  private games: Map<string, GameState> = new Map();
+  private readonly games: Map<string, GameState> = new Map();
 
   createGame(hostName: string, maxPlayers: number = 5): string {
     const gameId = uuidv4();
-    const deck = shuffleDeck(createDeck(maxPlayers));
     
     const game: GameState = {
       id: gameId,
@@ -17,14 +16,15 @@ export class GameManager {
         hand: [],
         score: 15, // Start with 15 points
         isHost: true,
-        isReady: true,
-        hasEntered: false,
+        isReady: false,
+        hasEntered: true,
         housesBuilt: 0,
-        isDealer: true,
-        isMouth: true
+        isDealer: false,
+        isMouth: false,
+        enteredTurn: undefined,
       }],
       currentPlayerIndex: 0,
-      deck: deck,
+      deck: [],
       tree: [],
       trumpCard: null,
       gamePhase: 'waiting',
@@ -34,16 +34,21 @@ export class GameManager {
       houses: [],
       leadSuit: null,
       createdAt: new Date(),
-      lastActivity: new Date()
+      lastActivity: new Date(),
+      events: []
     };
-
+    game.events.push({
+      type: 'game_created',
+      data: {...game},
+      timestamp: new Date()
+    });
     this.games.set(gameId, game);
     return gameId;
   }
 
   joinGame(gameId: string, playerName: string): Player | null {
     const game = this.games.get(gameId);
-    if (!game || game.gamePhase !== 'waiting' || game.players.length >= game.maxPlayers) {
+    if (!game || (game.gamePhase !== 'waiting' && game.gamePhase !== 'ready') || game.players.length >= game.maxPlayers) {
       return null;
     }
 
@@ -54,22 +59,94 @@ export class GameManager {
       score: 15,
       isHost: false,
       isReady: false,
-      hasEntered: false,
+      hasEntered: true,
       housesBuilt: 0,
       isDealer: false,
-      isMouth: false
+      isMouth: false,
+      enteredTurn: undefined,
     };
+
+    game.events.push({
+      type: 'player_joined',
+      data: {...game},
+      timestamp: new Date()
+    });
 
     game.players.push(player);
     game.lastActivity = new Date();
-    
     return player;
+  }
+
+  readyCheck(gameId: string, playerId: string, isReady: boolean): boolean {
+    const game = this.games.get(gameId);
+    if (!game || game.gamePhase !== 'waiting') {
+      return false;
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) {
+      return false;
+    }
+
+    if (isReady) {
+      player.isReady = true;
+      game.lastActivity = new Date();
+      game.events.push({
+        type: 'player_ready',
+        data: {...game},
+        timestamp: new Date()
+      });
+    } else {
+      player.isReady = false;
+      game.lastActivity = new Date();
+      game.events.push({
+        type: 'player_unready',
+        data: {...game},
+        timestamp: new Date()
+      });
+    }
+
+    // Check if all players are ready
+    const allReady = game.players.every(p => p.isReady === true);
+    if (allReady) {
+      game.gamePhase = 'ready';
+      game.events.push({
+        type: 'game_ready',
+        data: {...game},
+        timestamp: new Date()
+      });
+    }
+    return true;
+  }
+  leaveGame(gameId: string, playerId: string): boolean {
+    const game = this.games.get(gameId);
+    if (!game || (game.gamePhase !== 'waiting' && game.gamePhase !== 'ready')) {
+      return false;
+    }
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) {
+      return false;
+    }
+    game.players = game.players.filter(p => p.id !== playerId);
+    game.lastActivity = new Date();
+    game.events.push({
+      type: 'player_left',
+      data: {...game},
+      timestamp: new Date()
+    });
+    return true;
   }
 
   startGame(gameId: string): boolean {
     const game = this.games.get(gameId);
-    if (!game || game.players.length < 2 || game.gamePhase !== 'waiting') {
+    if (!game || game.players.length < 2 || game.gamePhase !== 'ready') {
       return false;
+    }
+
+    // Shuffle players array
+    for (let i = game.players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [game.players[i], game.players[j]] = [game.players[j], game.players[i]];
     }
 
     // Create deck based on player count
@@ -90,11 +167,55 @@ export class GameManager {
     game.gamePhase = 'dealing';
     game.currentPlayerIndex = 0;
     game.lastActivity = new Date();
-
+    game.events.push({
+      type: 'dealt_cards',
+      data: {...game},
+      timestamp: new Date()
+    });
     return true;
   }
 
-  enterGame(gameId: string, playerId: string): boolean {
+
+
+  private canPlayerDecide(game: GameState, playerId: string): boolean {
+    const player = game.players.find(p => p.id === playerId);
+    if (!player || player.enteredTurn !== undefined) {
+      return false; // Player already decided
+    }
+
+    const enteredPlayers = game.players.filter(p => p.enteredTurn === true);
+    const declinedPlayers = game.players.filter(p => p.enteredTurn === false);
+    const undecidedPlayers = game.players.filter(p => p.enteredTurn === undefined);
+
+    // If this is the last player deciding and only 1 player entered, auto-enter
+    if (undecidedPlayers.length === 1 && enteredPlayers.length === 1) {
+      return false; // Auto-enter, no choice
+    }
+
+    // If only 2 players remain undecided and others declined, auto-enter both
+    if (undecidedPlayers.length <= 2 && declinedPlayers.length >= game.players.length - 2) {
+      return false; // Auto-enter, no choice
+    }
+
+    return true; // Player can decide
+  }
+
+  private applyAutoEntryRules(game: GameState): void {
+    const enteredPlayers = game.players.filter(p => p.enteredTurn === true);
+    const declinedPlayers = game.players.filter(p => p.enteredTurn === false);
+    const undecidedPlayers = game.players.filter(p => p.enteredTurn === undefined);
+
+    // Rule 1: If only 2 players remain to decide, auto-enter them
+    if (undecidedPlayers.length <= 2 && declinedPlayers.length >= game.players.length - 2) {
+      undecidedPlayers.forEach(p => p.enteredTurn = true);
+    }
+    // Rule 2: If only 1 player entered and this is the last decision, auto-enter the last player
+    else if (enteredPlayers.length === 1 && undecidedPlayers.length === 1) {
+      undecidedPlayers[0].enteredTurn = true;
+    }
+  }
+
+  enterTurn(gameId: string, playerId: string): boolean {
     const game = this.games.get(gameId);
     if (!game || game.gamePhase !== 'dealing') {
       return false;
@@ -105,27 +226,31 @@ export class GameManager {
       return false;
     }
 
-    player.hasEntered = true;
-    game.lastActivity = new Date();
+    // Check if player can still decide
+    if (!this.canPlayerDecide(game, playerId)) {
+      // Auto-enter the player
+      player.enteredTurn = true;
+    } else {
+      player.enteredTurn = true;
+    }
 
-    // Check if all players have decided
-    const allDecided = game.players.every(p => p.hasEntered !== undefined);
-    if (allDecided) {
-      // Auto-enter last two players if others declined
-      const enteredPlayers = game.players.filter(p => p.hasEntered);
-      if (enteredPlayers.length <= 1) {
-        // Last two players must enter
-        const remainingPlayers = game.players.filter(p => !p.hasEntered);
-        remainingPlayers.slice(-2).forEach(p => p.hasEntered = true);
-      }
-      
+    game.lastActivity = new Date();
+    game.events.push({
+      type: 'player_entered',
+      data: {...game},
+      timestamp: new Date()
+    });
+
+    // Apply auto-entry rules and check if all decided
+    this.applyAutoEntryRules(game);
+    if (game.players.every(p => p.enteredTurn !== undefined)) {
       game.gamePhase = 'exchanging';
     }
 
     return true;
   }
 
-  declineGame(gameId: string, playerId: string): boolean {
+  skipTurn(gameId: string, playerId: string): boolean {
     const game = this.games.get(gameId);
     if (!game || game.gamePhase !== 'dealing') {
       return false;
@@ -136,19 +261,17 @@ export class GameManager {
       return false;
     }
 
-    player.hasEntered = false;
+    // Check if player can still decide
+    if (!this.canPlayerDecide(game, playerId)) {
+      return false; // Player cannot decline due to auto-entry rules
+    }
+
+    player.enteredTurn = false;
     game.lastActivity = new Date();
 
-    // Check if all players have decided
-    const allDecided = game.players.every(p => p.hasEntered !== undefined);
-    if (allDecided) {
-      // Auto-enter last two players if others declined
-      const enteredPlayers = game.players.filter(p => p.hasEntered);
-      if (enteredPlayers.length <= 1) {
-        const remainingPlayers = game.players.filter(p => !p.hasEntered);
-        remainingPlayers.slice(-2).forEach(p => p.hasEntered = true);
-      }
-      
+    // Apply auto-entry rules and check if all decided
+    this.applyAutoEntryRules(game);
+    if (game.players.every(p => p.enteredTurn !== undefined)) {
       game.gamePhase = 'exchanging';
     }
 
@@ -162,7 +285,7 @@ export class GameManager {
     }
 
     const player = game.players.find(p => p.id === playerId);
-    if (!player || !player.hasEntered || game.tree.length === 0) {
+    if (!player || !player.enteredTurn || game.tree.length === 0) {
       return false;
     }
 
@@ -190,7 +313,7 @@ export class GameManager {
     }
 
     const player = game.players.find(p => p.id === playerId);
-    if (!player || !player.hasEntered || game.players[game.currentPlayerIndex].id !== playerId) {
+    if (!player || !player.enteredTurn || game.players[game.currentPlayerIndex].id !== playerId) {
       return false;
     }
 
@@ -218,7 +341,7 @@ export class GameManager {
     game.lastActivity = new Date();
 
     // Check if house is complete
-    if (game.currentHouse.length === game.players.filter(p => p.hasEntered).length) {
+    if (game.currentHouse.length === game.players.filter(p => p.enteredTurn).length) {
       this.completeHouse(game);
     } else {
       // Move to next player
@@ -226,7 +349,7 @@ export class GameManager {
     }
 
     // Check if game is finished
-    if (game.players.every(p => !p.hasEntered || p.hand.length === 0)) {
+    if (game.players.every(p => !p.enteredTurn || p.hand.length === 0)) {
       this.endGame(game);
     }
 
@@ -237,7 +360,7 @@ export class GameManager {
     const trumpSuit = game.trumpCard?.suit || null;
     const highestCard = findHighestCard(game.currentHouse, trumpSuit);
     const winner = game.players.find(p => 
-      p.hasEntered && p.hand.some(card => 
+      p.enteredTurn && p.hand.some(card => 
         card.suit === highestCard.suit && card.rank === highestCard.rank
       )
     );
@@ -266,14 +389,14 @@ export class GameManager {
     
     // Calculate final scores
     game.players.forEach(player => {
-      player.score = calculateScore(player.score, player.housesBuilt, player.hasEntered);
+      player.score = calculateScore(player.score, player.housesBuilt, player.enteredTurn === true);
     });
   }
 
   private nextTurn(game: GameState): void {
     // Find next player who has entered
     let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
-    while (!game.players[nextIndex].hasEntered) {
+    while (!game.players[nextIndex].enteredTurn) {
       nextIndex = (nextIndex + 1) % game.players.length;
     }
     game.currentPlayerIndex = nextIndex;

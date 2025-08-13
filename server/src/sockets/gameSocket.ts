@@ -3,8 +3,8 @@ import { GameManager } from '../game/GameManager';
 import { GameState, Player } from '../types/game';
 
 export class GameSocketHandler {
-  private gameManager: GameManager;
-  private playerSockets: Map<string, { socket: Socket; gameId: string; playerId: string }> = new Map();
+  private readonly gameManager: GameManager;
+  private readonly playerSockets: Map<string, { socket: Socket; gameId: string; playerId: string }> = new Map();
 
   constructor(gameManager: GameManager) {
     this.gameManager = gameManager;
@@ -98,19 +98,7 @@ export class GameSocketHandler {
       }
     });
 
-    // Handle drawing a card
-    socket.on('draw_card', (data: { gameId: string }) => {
-      const playerSocket = this.playerSockets.get(socket.id);
-      if (!playerSocket) return;
 
-      const success = this.gameManager.drawCard(data.gameId, playerSocket.playerId);
-      
-      if (success) {
-        this.broadcastGameState(data.gameId);
-      } else {
-        socket.emit('draw_error', { message: 'Cannot draw card' });
-      }
-    });
 
     // Handle disconnection
     socket.on('disconnect', () => {

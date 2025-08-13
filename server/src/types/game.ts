@@ -31,7 +31,7 @@ export interface GameState {
   deck: Card[];
   tree: Card[]; // undealt cards for exchange
   trumpCard: Card | null; // face-up card that determines trump suit
-  gamePhase: 'waiting' | 'dealing' | 'entering' | 'exchanging' | 'playing' | 'finished';
+  gamePhase: 'waiting' | 'ready' | 'dealing' | 'entering' | 'exchanging' | 'playing' | 'finished';
   roundNumber: number;
   maxPlayers: number;
   currentHouse: Card[]; // cards played in current house
@@ -39,18 +39,11 @@ export interface GameState {
   leadSuit: Card['suit'] | null; // suit of first card in current house
   createdAt: Date;
   lastActivity: Date;
-}
-
-export interface GameAction {
-  type: 'enter_game' | 'decline_game' | 'exchange_cards' | 'play_card' | 'draw_card' | 'skip_turn';
-  playerId: string;
-  cardIndex?: number;
-  card?: Card;
-  exchangeCards?: number[]; // indices of cards to exchange
+  events: GameEvent[];
 }
 
 export interface GameEvent {
-  type: 'player_joined' | 'player_left' | 'card_played' | 'turn_changed' | 'game_started' | 'game_ended' | 'house_completed' | 'player_entered' | 'player_declined';
+  type: 'game_created' | 'player_joined' | 'game_ready' |'player_unready' |'player_ready' | 'player_left' | 'dealt_cards' | 'card_played' | 'turn_changed' | 'game_started' | 'game_ended' | 'house_completed' | 'player_entered' | 'player_declined';
   data: any;
   timestamp: Date;
 }
