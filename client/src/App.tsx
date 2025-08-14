@@ -192,7 +192,7 @@ function App() {
                   placeholder="Type a message..."
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onKeyDown={handleKeyPress}
                   className="message-input"
                 />
                 <button onClick={sendMessage} disabled={!newMessage.trim()}>

@@ -1,6 +1,6 @@
 import { Socket } from 'socket.io';
 import { GameManager } from '../game/GameManager';
-import { GameState, Player } from '../types/game';
+import { GameState} from '../types/game';
 
 export class GameSocketHandler {
   private readonly gameManager: GameManager;
@@ -58,7 +58,7 @@ export class GameSocketHandler {
       if (!game) return;
 
       const player = game.players.find(p => p.id === playerSocket.playerId);
-      if (!player || !player.isHost) return;
+      if (!player?.isHost) return;
 
       const success = this.gameManager.startGame(data.gameId);
       if (success) {
@@ -398,7 +398,7 @@ export class GameSocketHandler {
     if (!game) return;
 
     // Send personalized game state to each player
-    for (const [socketId, playerSocket] of this.playerSockets.entries()) {
+    for (const [, playerSocket] of this.playerSockets.entries()) {
       if (playerSocket.gameId === gameId) {
         const sanitizedState = this.sanitizeGameState(game, playerSocket.playerId);
         playerSocket.socket.emit('game_state', sanitizedState);

@@ -6,7 +6,7 @@ export function createGameRoutes(gameManager: GameManager): Router {
 
   // Create a new game
   router.post('/games', (req, res) => {
-    const { hostName, maxPlayers = 4 } = req.body;
+    const { hostName, maxPlayers = 5 } = req.body;
     
     if (!hostName) {
       return res.status(400).json({ error: 'Host name is required' });
