@@ -1,4 +1,4 @@
-import { GameState, Player, Card, House } from '../types/game';
+import { GameState, Player, House, ChatMessage } from '../types/game';
 import { createDeck, shuffleDeck, dealCards, canPlayCard, findHighestCard, calculateScore } from '../utils/deck';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -36,11 +36,12 @@ export class GameManager {
       leadSuit: null,
       createdAt: new Date(),
       lastActivity: new Date(),
-      events: []
+      events: [],
+      chatMessages: []
     };
     game.events.push({
       type: 'game_created',
-      data: {...game},
+      data: { gameId: game.id, hostName },
       timestamp: new Date()
     });
     this.games.set(gameId, game);
@@ -70,12 +71,16 @@ export class GameManager {
 
     game.events.push({
       type: 'player_joined',
-      data: {...game},
+      data: { playerName, gameId: game.id },
       timestamp: new Date()
     });
 
     game.players.push(player);
     game.lastActivity = new Date();
+    
+    // Send system message
+    this.sendSystemMessage(gameId, `${playerName} joined the game`);
+    
     return player;
   }
 
@@ -95,7 +100,7 @@ export class GameManager {
       game.lastActivity = new Date();
       game.events.push({
         type: 'player_ready',
-        data: {...game},
+        data: { playerId, gameId: game.id },
         timestamp: new Date()
       });
     } else {
@@ -103,7 +108,7 @@ export class GameManager {
       game.lastActivity = new Date();
       game.events.push({
         type: 'player_unready',
-        data: {...game},
+        data: { playerId, gameId: game.id },
         timestamp: new Date()
       });
     }
@@ -114,7 +119,7 @@ export class GameManager {
       game.gamePhase = 'ready';
       game.events.push({
         type: 'game_ready',
-        data: {...game},
+        data: { gameId: game.id },
         timestamp: new Date()
       });
     }
@@ -129,13 +134,18 @@ export class GameManager {
     if (!player) {
       return false;
     }
+    const playerName = player.name;
     game.players = game.players.filter(p => p.id !== playerId);
     game.lastActivity = new Date();
     game.events.push({
       type: 'player_left',
-      data: {...game},
+      data: { playerId, playerName, gameId: game.id },
       timestamp: new Date()
     });
+    
+    // Send system message
+    this.sendSystemMessage(gameId, `${playerName} left the game`);
+    
     return true;
   }
 
@@ -175,9 +185,13 @@ export class GameManager {
     
     game.events.push({
       type: 'dealt_cards',
-      data: {...game},
+      data: { gameId: game.id, trumpCard },
       timestamp: new Date()
     });
+    
+    // Send system message
+    this.sendSystemMessage(gameId, `Game started! Trump card is ${trumpCard?.rank} of ${trumpCard?.suit}`);
+    
     return true;
   }
 
@@ -221,7 +235,7 @@ export class GameManager {
     game.lastActivity = new Date();
     game.events.push({
       type: 'player_entered',
-      data: {...game},
+      data: { playerId, gameId: game.id },
       timestamp: new Date()
     });
 
@@ -247,7 +261,7 @@ export class GameManager {
       game.lastActivity = new Date();
       game.events.push({
         type: 'player_entered',
-        data: {...game},
+        data: { playerId, gameId: game.id },
         timestamp: new Date()
       });
       return false; // Player cannot decline due to auto-entry rules
@@ -257,7 +271,7 @@ export class GameManager {
     game.lastActivity = new Date();
     game.events.push({
       type: 'player_declined',
-      data: {...game},
+      data: { playerId, gameId: game.id },
       timestamp: new Date()
     });
 
@@ -296,7 +310,7 @@ export class GameManager {
     game.lastActivity = new Date();
     game.events.push({
       type: 'cards_exchanged',
-      data: {...game},
+      data: { playerId, gameId: game.id, cardCount: cardIndices.length },
       timestamp: new Date()
     });
 
@@ -304,7 +318,7 @@ export class GameManager {
       game.gamePhase = 'trump_exchanging';
       game.events.push({
         type: 'trump_exchanging',
-        data: {...game},
+        data: { gameId: game.id },
         timestamp: new Date()
       }); 
     }
@@ -334,14 +348,14 @@ export class GameManager {
     
     game.events.push({
       type: 'trump_exchanged',
-      data: {...game},
+      data: { playerId, gameId: game.id, cardIndex },
       timestamp: new Date()
     });
 
     game.gamePhase = 'playing';
     game.events.push({
       type: 'game_started',
-      data: {...game},
+      data: { gameId: game.id },
       timestamp: new Date()
     });
 
@@ -365,9 +379,10 @@ export class GameManager {
 
     const card = player.hand[cardIndex];
     const trumpSuit = game.trumpCard?.suit || null;
+    const currentHouse = game.currentHouse;
 
     // Check if card can be played
-    if (!canPlayCard(card, game.leadSuit, trumpSuit, player.hand)) {
+    if (!canPlayCard(card, game.leadSuit, trumpSuit, player.hand, currentHouse)) {
       return false;
     }
 
@@ -442,6 +457,65 @@ export class GameManager {
       nextIndex = (nextIndex + 1) % game.players.length;
     }
     game.currentPlayerIndex = nextIndex;
+  }
+
+  sendChatMessage(gameId: string, playerId: string, message: string): ChatMessage | null {
+    const game = this.games.get(gameId);
+    if (!game) {
+      return null;
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) {
+      return null;
+    }
+
+    const chatMessage: ChatMessage = {
+      id: uuidv4(),
+      playerId: player.id,
+      playerName: player.name,
+      message: message.trim(),
+      timestamp: new Date(),
+      type: 'chat'
+    };
+
+    // Add to game's chat history (keep last 100 messages)
+    game.chatMessages.push(chatMessage);
+    if (game.chatMessages.length > 100) {
+      game.chatMessages = game.chatMessages.slice(-100);
+    }
+
+    game.lastActivity = new Date();
+    return chatMessage;
+  }
+
+  sendSystemMessage(gameId: string, message: string): ChatMessage | null {
+    const game = this.games.get(gameId);
+    if (!game) {
+      return null;
+    }
+
+    const systemMessage: ChatMessage = {
+      id: uuidv4(),
+      playerId: 'system',
+      playerName: 'System',
+      message: message,
+      timestamp: new Date(),
+      type: 'system'
+    };
+
+    game.chatMessages.push(systemMessage);
+    if (game.chatMessages.length > 100) {
+      game.chatMessages = game.chatMessages.slice(-100);
+    }
+
+    game.lastActivity = new Date();
+    return systemMessage;
+  }
+
+  getChatHistory(gameId: string): ChatMessage[] {
+    const game = this.games.get(gameId);
+    return game ? game.chatMessages : [];
   }
 
   getGame(gameId: string): GameState | null {

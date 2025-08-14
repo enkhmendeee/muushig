@@ -1,0 +1,246 @@
+.App {
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.connection-status {
+  font-size: 0.9rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.App-main {
+  flex: 1;
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.setup-section {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.input-group {
+  margin-bottom: 30px;
+}
+
+.input-field {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 16px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: border-color 0.3s;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.game-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-top: 30px;
+}
+
+.action-section {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.action-section h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  font-size: 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin: 5px;
+}
+
+button:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.game-section {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 30px;
+  height: calc(100vh - 200px);
+}
+
+.game-info {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  height: fit-content;
+}
+
+.game-info h2 {
+  margin-top: 0;
+  color: #333;
+}
+
+.game-info p {
+  margin: 10px 0;
+  color: #666;
+}
+
+.chat-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-message {
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-align: left;
+  max-width: 80%;
+}
+
+.chat-message.chat {
+  background-color: #f8f9fa;
+  border-left: 4px solid #007bff;
+  align-self: flex-start;
+}
+
+.chat-message.system {
+  background-color: #fff3cd;
+  border-left: 4px solid #ffc107;
+  align-self: center;
+  max-width: 90%;
+}
+
+.chat-message.game {
+  background-color: #d1ecf1;
+  border-left: 4px solid #17a2b8;
+  align-self: center;
+  max-width: 90%;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.player-name {
+  font-weight: bold;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.message-time {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.message-content {
+  color: #333;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.chat-input {
+  padding: 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  gap: 10px;
+}
+
+.message-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.3s;
+}
+
+.message-input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.chat-input button {
+  padding: 12px 20px;
+  white-space: nowrap;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .App-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .game-actions {
+    grid-template-columns: 1fr;
+  }
+  
+  .game-section {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  
+  .chat-container {
+    height: 400px;
+  }
+  
+  .chat-message {
+    max-width: 95%;
+  }
+}

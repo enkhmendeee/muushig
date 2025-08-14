@@ -309,15 +309,86 @@ export class GameSocketHandler {
         socket.emit('game_state', this.sanitizeGameState(game, playerSocket.playerId));
       }
     });
+
+    // Handle sending chat message
+    socket.on('send_chat', (data: { gameId: string; message: string }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      // Validate message
+      if (!data.message || data.message.trim().length === 0) {
+        socket.emit('chat_error', { message: 'Message cannot be empty' });
+        return;
+      }
+
+      if (data.message.length > 200) {
+        socket.emit('chat_error', { message: 'Message too long (max 200 characters)' });
+        return;
+      }
+
+      const chatMessage = this.gameManager.sendChatMessage(data.gameId, playerSocket.playerId, data.message);
+      
+      if (chatMessage) {
+        // Broadcast to all players in the game
+        socket.to(data.gameId).emit('chat_message', chatMessage);
+        socket.emit('chat_message', chatMessage);
+      } else {
+        socket.emit('chat_error', { message: 'Failed to send message' });
+      }
+    });
+
+    // Handle getting chat history
+    socket.on('get_chat_history', (data: { gameId: string }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const chatHistory = this.gameManager.getChatHistory(data.gameId);
+      socket.emit('chat_history', { gameId: data.gameId, messages: chatHistory });
+    });
   }
 
   private sanitizeGameState(game: GameState, playerId: string): any {
-    // Return game state with other players' hands hidden
+    // Return game state with other players' hands hidden and dates converted to strings
     return {
-      ...game,
+      id: game.id,
       players: game.players.map(player => ({
-        ...player,
-        hand: player.id === playerId ? player.hand : player.hand.length // Only show hand count for other players
+        id: player.id,
+        name: player.name,
+        hand: player.id === playerId ? player.hand : player.hand.length, // Only show hand count for other players
+        score: player.score,
+        isHost: player.isHost,
+        isReady: player.isReady,
+        hasEntered: player.hasEntered,
+        housesBuilt: player.housesBuilt,
+        isDealer: player.isDealer,
+        isMouth: player.isMouth,
+        enteredRound: player.enteredRound,
+        hasExchanged: player.hasExchanged
+      })),
+      currentPlayerIndex: game.currentPlayerIndex,
+      deck: game.deck,
+      tree: game.tree,
+      trumpCard: game.trumpCard,
+      gamePhase: game.gamePhase,
+      roundNumber: game.roundNumber,
+      maxPlayers: game.maxPlayers,
+      currentHouse: game.currentHouse,
+      houses: game.houses,
+      leadSuit: game.leadSuit,
+      createdAt: game.createdAt.toISOString(),
+      lastActivity: game.lastActivity.toISOString(),
+      events: game.events.map(event => ({
+        type: event.type,
+        data: event.data,
+        timestamp: event.timestamp.toISOString()
+      })),
+      chatMessages: game.chatMessages.map(message => ({
+        id: message.id,
+        playerId: message.playerId,
+        playerName: message.playerName,
+        message: message.message,
+        timestamp: message.timestamp.toISOString(),
+        type: message.type
       }))
     };
   }

@@ -114,6 +114,8 @@ GET /api/games/{gameId}
 - `exchange_cards` - Exchange cards with the tree
 - `play_card` - Play a card from hand
 - `get_game_state` - Get current game state
+- `send_chat` - Send a chat message
+- `get_chat_history` - Get chat history for the game
 
 ### Server to Client
 - `game_created` - Game created successfully
@@ -127,6 +129,9 @@ GET /api/games/{gameId}
 - `player_declined` - Player decided not to enter
 - `house_completed` - A house was completed
 - `play_error` - Invalid move attempted
+- `chat_message` - New chat message received
+- `chat_history` - Chat history for the game
+- `chat_error` - Chat error (invalid message, etc.)
 
 ## Game Phases
 
