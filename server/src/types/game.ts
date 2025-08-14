@@ -6,9 +6,11 @@ export interface Player {
   isHost: boolean;
   isReady: boolean;
   hasEntered: boolean;
+  hasExchanged: boolean;
   housesBuilt: number;
   isDealer: boolean;
   isMouth: boolean;
+  enteredRound: boolean | undefined;
 }
 
 export interface Card {
@@ -31,7 +33,7 @@ export interface GameState {
   deck: Card[];
   tree: Card[]; // undealt cards for exchange
   trumpCard: Card | null; // face-up card that determines trump suit
-  gamePhase: 'waiting' | 'ready' | 'dealing' | 'entering' | 'exchanging' | 'playing' | 'finished';
+  gamePhase: 'waiting' | 'ready' | 'dealing' | 'entering' | 'exchanging' | 'trump_exchanging' | 'playing' | 'finished';
   roundNumber: number;
   maxPlayers: number;
   currentHouse: Card[]; // cards played in current house
@@ -43,7 +45,7 @@ export interface GameState {
 }
 
 export interface GameEvent {
-  type: 'game_created' | 'player_joined' | 'game_ready' |'player_unready' |'player_ready' | 'player_left' | 'dealt_cards' | 'card_played' | 'turn_changed' | 'game_started' | 'game_ended' | 'house_completed' | 'player_entered' | 'player_declined';
+  type: 'game_created' | 'player_joined' | 'game_ready' |'player_unready' |'player_ready' | 'player_left' | 'dealt_cards' | 'card_played' | 'trump_exchanging' | 'turn_changed' | 'game_started' | 'game_ended' | 'house_completed' | 'player_entered' | 'player_declined' | 'cards_exchanged';
   data: any;
   timestamp: Date;
 }

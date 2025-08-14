@@ -15,7 +15,7 @@ export class GameSocketHandler {
 
     // Handle game creation
     socket.on('create_game', (data: { hostName: string; maxPlayers?: number }) => {
-      const gameId = this.gameManager.createGame(data.hostName, data.maxPlayers || 4);
+      const gameId = this.gameManager.createGame(data.hostName, data.maxPlayers || 5);
       const game = this.gameManager.getGame(gameId);
       
       if (game) {
@@ -74,6 +74,152 @@ export class GameSocketHandler {
       }
     });
 
+    // Handle ready check
+    socket.on('ready_check', (data: { gameId: string; isReady: boolean }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const success = this.gameManager.readyCheck(data.gameId, playerSocket.playerId, data.isReady);
+      
+      if (success) {
+        const game = this.gameManager.getGame(data.gameId);
+        if (game) {
+          // Broadcast updated game state
+          this.broadcastGameState(data.gameId);
+          
+          // Notify other players about ready status
+          if (data.isReady) {
+            socket.to(data.gameId).emit('player_ready', { playerId: playerSocket.playerId });
+          } else {
+            socket.to(data.gameId).emit('player_unready', { playerId: playerSocket.playerId });
+          }
+          
+          // Check if game is ready to start
+          if (game.gamePhase === 'ready') {
+            socket.to(data.gameId).emit('game_ready');
+            socket.emit('game_ready');
+          }
+        }
+      } else {
+        socket.emit('ready_error', { message: 'Cannot change ready status' });
+      }
+    });
+
+    // Handle entering the round
+    socket.on('enter_turn', (data: { gameId: string }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const success = this.gameManager.enterTurn(data.gameId, playerSocket.playerId);
+      
+      if (success) {
+        const game = this.gameManager.getGame(data.gameId);
+        if (game) {
+          // Broadcast updated game state
+          this.broadcastGameState(data.gameId);
+          
+          // Notify other players
+          socket.to(data.gameId).emit('player_entered', { playerId: playerSocket.playerId });
+          
+          // Check if all players have decided
+          if (game.gamePhase === 'exchanging') {
+            socket.to(data.gameId).emit('phase_exchanging');
+            socket.emit('phase_exchanging');
+          }
+        }
+      } else {
+        socket.emit('enter_error', { message: 'Cannot enter turn' });
+      }
+    });
+
+    // Handle skipping the round
+    socket.on('skip_turn', (data: { gameId: string }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const success = this.gameManager.skipTurn(data.gameId, playerSocket.playerId);
+      
+      if (success) {
+        const game = this.gameManager.getGame(data.gameId);
+        if (game) {
+          // Broadcast updated game state
+          this.broadcastGameState(data.gameId);
+          
+          // Notify other players
+          socket.to(data.gameId).emit('player_declined', { playerId: playerSocket.playerId });
+          
+          // Check if all players have decided
+          if (game.gamePhase === 'exchanging') {
+            socket.to(data.gameId).emit('phase_exchanging');
+            socket.emit('phase_exchanging');
+          }
+        }
+      } else {
+        socket.emit('skip_error', { message: 'Cannot skip turn' });
+      }
+    });
+
+    // Handle exchanging cards
+    socket.on('exchange_cards', (data: { gameId: string; cardIndices: number[] }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const success = this.gameManager.exchangeCards(data.gameId, playerSocket.playerId, data.cardIndices);
+      
+      if (success) {
+        const game = this.gameManager.getGame(data.gameId);
+        if (game) {
+          // Broadcast updated game state
+          this.broadcastGameState(data.gameId);
+          
+          // Notify other players
+          socket.to(data.gameId).emit('cards_exchanged', { 
+            playerId: playerSocket.playerId, 
+            cardCount: data.cardIndices.length 
+          });
+          
+          // Check if exchange phase is complete
+          if (game.gamePhase === 'trump_exchanging') {
+            socket.to(data.gameId).emit('phase_trump_exchanging');
+            socket.emit('phase_trump_exchanging');
+          } else if (game.gamePhase === 'playing') {
+            socket.to(data.gameId).emit('game_started');
+            socket.emit('game_started');
+          }
+        }
+      } else {
+        socket.emit('exchange_error', { message: 'Cannot exchange cards' });
+      }
+    });
+
+    // Handle exchanging trump card (dealer only)
+    socket.on('exchange_trump', (data: { gameId: string; cardIndex: number }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const success = this.gameManager.exchangeTrump(data.gameId, playerSocket.playerId, data.cardIndex);
+      
+      if (success) {
+        const game = this.gameManager.getGame(data.gameId);
+        if (game) {
+          // Broadcast updated game state
+          this.broadcastGameState(data.gameId);
+          
+          // Notify other players
+          socket.to(data.gameId).emit('trump_exchanged', { 
+            playerId: playerSocket.playerId, 
+            cardIndex: data.cardIndex 
+          });
+          
+          // Game starts after trump exchange
+          socket.to(data.gameId).emit('game_started');
+          socket.emit('game_started');
+        }
+      } else {
+        socket.emit('trump_exchange_error', { message: 'Cannot exchange trump card' });
+      }
+    });
+
     // Handle playing a card
     socket.on('play_card', (data: { gameId: string; cardIndex: number }) => {
       const playerSocket = this.playerSockets.get(socket.id);
@@ -84,13 +230,25 @@ export class GameSocketHandler {
       if (success) {
         const game = this.gameManager.getGame(data.gameId);
         if (game) {
+          // Broadcast updated game state
+          this.broadcastGameState(data.gameId);
+          
+          // Notify other players about the card played
+          socket.to(data.gameId).emit('card_played', { 
+            playerId: playerSocket.playerId, 
+            cardIndex: data.cardIndex 
+          });
+          
           // Check if game is finished
           if (game.gamePhase === 'finished') {
-            socket.to(data.gameId).emit('game_ended', { winner: game.players.find(p => p.hand.length === 0) });
-            socket.emit('game_ended', { winner: game.players.find(p => p.hand.length === 0) });
+            const winner = game.players.find(p => p.hand.length === 0);
+            socket.to(data.gameId).emit('game_ended', { winner });
+            socket.emit('game_ended', { winner });
           } else {
-            // Broadcast updated game state
-            this.broadcastGameState(data.gameId);
+            // Notify about turn change
+            const currentPlayer = game.players[game.currentPlayerIndex];
+            socket.to(data.gameId).emit('turn_changed', { playerId: currentPlayer.id });
+            socket.emit('turn_changed', { playerId: currentPlayer.id });
           }
         }
       } else {
@@ -98,8 +256,30 @@ export class GameSocketHandler {
       }
     });
 
+    // Handle leaving game
+    socket.on('leave_game', (data: { gameId: string }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
 
-
+      const success = this.gameManager.leaveGame(data.gameId, playerSocket.playerId);
+      
+      if (success) {
+        const game = this.gameManager.getGame(data.gameId);
+        if (game) {
+          // Notify other players
+          socket.to(data.gameId).emit('player_left', { playerId: playerSocket.playerId });
+          
+          // Broadcast updated game state
+          this.broadcastGameState(data.gameId);
+          
+          // Clean up socket mapping
+          this.playerSockets.delete(socket.id);
+          socket.leave(data.gameId);
+        }
+      } else {
+        socket.emit('leave_error', { message: 'Cannot leave game' });
+      }
+    });
     // Handle disconnection
     socket.on('disconnect', () => {
       const playerSocket = this.playerSockets.get(socket.id);

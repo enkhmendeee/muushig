@@ -83,7 +83,7 @@ function getCardValue(rank: Card['rank']): number {
   }
 }
 
-export function canPlayCard(card: Card, leadSuit: Card['suit'] | null, trumpSuit: Card['suit'] | null, playerHand: Card[]): boolean {
+export function canPlayCard(card: Card, leadSuit: Card['suit'] | null, trumpSuit: Card['suit'] | null, playerHand: Card[], currentHouse: Card[]): boolean {
   // If no lead suit, any card can be played
   if (!leadSuit) {
     return true;

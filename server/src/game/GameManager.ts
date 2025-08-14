@@ -21,7 +21,8 @@ export class GameManager {
         housesBuilt: 0,
         isDealer: false,
         isMouth: false,
-        enteredTurn: undefined,
+        enteredRound: undefined,
+        hasExchanged: false,
       }],
       currentPlayerIndex: 0,
       deck: [],
@@ -63,7 +64,8 @@ export class GameManager {
       housesBuilt: 0,
       isDealer: false,
       isMouth: false,
-      enteredTurn: undefined,
+      enteredRound: undefined,
+      hasExchanged: false,
     };
 
     game.events.push({
@@ -167,6 +169,10 @@ export class GameManager {
     game.gamePhase = 'dealing';
     game.currentPlayerIndex = 0;
     game.lastActivity = new Date();
+
+    game.players[0].isMouth = true;
+    game.players[game.players.length - 1].isDealer = true;
+    
     game.events.push({
       type: 'dealt_cards',
       data: {...game},
@@ -179,13 +185,13 @@ export class GameManager {
 
   private canPlayerDecide(game: GameState, playerId: string): boolean {
     const player = game.players.find(p => p.id === playerId);
-    if (!player || player.enteredTurn !== undefined) {
+    if (!player || player.enteredRound !== undefined) {
       return false; // Player already decided
     }
 
-    const enteredPlayers = game.players.filter(p => p.enteredTurn === true);
-    const declinedPlayers = game.players.filter(p => p.enteredTurn === false);
-    const undecidedPlayers = game.players.filter(p => p.enteredTurn === undefined);
+    const enteredPlayers = game.players.filter(p => p.enteredRound === true);
+    const declinedPlayers = game.players.filter(p => p.enteredRound === false);
+    const undecidedPlayers = game.players.filter(p => p.enteredRound === undefined);
 
     // If this is the last player deciding and only 1 player entered, auto-enter
     if (undecidedPlayers.length === 1 && enteredPlayers.length === 1) {
@@ -200,21 +206,6 @@ export class GameManager {
     return true; // Player can decide
   }
 
-  private applyAutoEntryRules(game: GameState): void {
-    const enteredPlayers = game.players.filter(p => p.enteredTurn === true);
-    const declinedPlayers = game.players.filter(p => p.enteredTurn === false);
-    const undecidedPlayers = game.players.filter(p => p.enteredTurn === undefined);
-
-    // Rule 1: If only 2 players remain to decide, auto-enter them
-    if (undecidedPlayers.length <= 2 && declinedPlayers.length >= game.players.length - 2) {
-      undecidedPlayers.forEach(p => p.enteredTurn = true);
-    }
-    // Rule 2: If only 1 player entered and this is the last decision, auto-enter the last player
-    else if (enteredPlayers.length === 1 && undecidedPlayers.length === 1) {
-      undecidedPlayers[0].enteredTurn = true;
-    }
-  }
-
   enterTurn(gameId: string, playerId: string): boolean {
     const game = this.games.get(gameId);
     if (!game || game.gamePhase !== 'dealing') {
@@ -226,14 +217,7 @@ export class GameManager {
       return false;
     }
 
-    // Check if player can still decide
-    if (!this.canPlayerDecide(game, playerId)) {
-      // Auto-enter the player
-      player.enteredTurn = true;
-    } else {
-      player.enteredTurn = true;
-    }
-
+    player.enteredRound = true;
     game.lastActivity = new Date();
     game.events.push({
       type: 'player_entered',
@@ -241,12 +225,9 @@ export class GameManager {
       timestamp: new Date()
     });
 
-    // Apply auto-entry rules and check if all decided
-    this.applyAutoEntryRules(game);
-    if (game.players.every(p => p.enteredTurn !== undefined)) {
+      if (game.players.every(p => p.enteredRound !== undefined)) {
       game.gamePhase = 'exchanging';
     }
-
     return true;
   }
 
@@ -261,17 +242,26 @@ export class GameManager {
       return false;
     }
 
-    // Check if player can still decide
     if (!this.canPlayerDecide(game, playerId)) {
+      player.enteredRound = true;
+      game.lastActivity = new Date();
+      game.events.push({
+        type: 'player_entered',
+        data: {...game},
+        timestamp: new Date()
+      });
       return false; // Player cannot decline due to auto-entry rules
     }
 
-    player.enteredTurn = false;
+    player.enteredRound = false;
     game.lastActivity = new Date();
+    game.events.push({
+      type: 'player_declined',
+      data: {...game},
+      timestamp: new Date()
+    });
 
-    // Apply auto-entry rules and check if all decided
-    this.applyAutoEntryRules(game);
-    if (game.players.every(p => p.enteredTurn !== undefined)) {
+    if (game.players.every(p => p.enteredRound !== undefined)) {
       game.gamePhase = 'exchanging';
     }
 
@@ -285,7 +275,7 @@ export class GameManager {
     }
 
     const player = game.players.find(p => p.id === playerId);
-    if (!player || !player.enteredTurn || game.tree.length === 0) {
+    if (!player || !player.enteredRound || game.tree.length === 0) {
       return false;
     }
 
@@ -294,14 +284,66 @@ export class GameManager {
     const newCards = game.tree.splice(0, cardsToExchange.length);
     
     // Remove old cards and add new ones
-    cardIndices.reverse().forEach(i => {
+    const reversedIndices = [...cardIndices].reverse();
+    reversedIndices.forEach(i => {
       if (i >= 0 && i < player.hand.length) {
         player.hand.splice(i, 1);
       }
     });
     
     player.hand.push(...newCards);
+    player.hasExchanged = true;
     game.lastActivity = new Date();
+    game.events.push({
+      type: 'cards_exchanged',
+      data: {...game},
+      timestamp: new Date()
+    });
+
+    if (game.players.filter(p => p.enteredRound).every(p => p.hasExchanged) || game.tree.length === 0) {
+      game.gamePhase = 'trump_exchanging';
+      game.events.push({
+        type: 'trump_exchanging',
+        data: {...game},
+        timestamp: new Date()
+      }); 
+    }
+    return true;
+  }
+
+  exchangeTrump(gameId: string, playerId: string, cardIndex: number): boolean {
+    const game = this.games.get(gameId);
+    if (!game || game.gamePhase !== 'trump_exchanging') {
+      return false;
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (!player || !player.enteredRound || !player.isDealer || !game.trumpCard) {
+      return false;
+    }
+
+    if (cardIndex < 0 || cardIndex >= player.hand.length) {
+      return false;
+    }
+
+    // Exchange the card with trump card
+    player.hand[cardIndex] = game.trumpCard;
+    
+    player.hasExchanged = true;
+    game.lastActivity = new Date();
+    
+    game.events.push({
+      type: 'trump_exchanged',
+      data: {...game},
+      timestamp: new Date()
+    });
+
+    game.gamePhase = 'playing';
+    game.events.push({
+      type: 'game_started',
+      data: {...game},
+      timestamp: new Date()
+    });
 
     return true;
   }
@@ -313,7 +355,7 @@ export class GameManager {
     }
 
     const player = game.players.find(p => p.id === playerId);
-    if (!player || !player.enteredTurn || game.players[game.currentPlayerIndex].id !== playerId) {
+    if (!player || !player.enteredRound || game.players[game.currentPlayerIndex].id !== playerId) {
       return false;
     }
 
@@ -341,7 +383,7 @@ export class GameManager {
     game.lastActivity = new Date();
 
     // Check if house is complete
-    if (game.currentHouse.length === game.players.filter(p => p.enteredTurn).length) {
+    if (game.currentHouse.length === game.players.filter(p => p.enteredRound).length) {
       this.completeHouse(game);
     } else {
       // Move to next player
@@ -349,7 +391,7 @@ export class GameManager {
     }
 
     // Check if game is finished
-    if (game.players.every(p => !p.enteredTurn || p.hand.length === 0)) {
+    if (game.players.every(p => !p.enteredRound || p.hand.length === 0)) {
       this.endGame(game);
     }
 
@@ -360,7 +402,7 @@ export class GameManager {
     const trumpSuit = game.trumpCard?.suit || null;
     const highestCard = findHighestCard(game.currentHouse, trumpSuit);
     const winner = game.players.find(p => 
-      p.enteredTurn && p.hand.some(card => 
+      p.enteredRound && p.hand.some(card => 
         card.suit === highestCard.suit && card.rank === highestCard.rank
       )
     );
@@ -389,14 +431,14 @@ export class GameManager {
     
     // Calculate final scores
     game.players.forEach(player => {
-      player.score = calculateScore(player.score, player.housesBuilt, player.enteredTurn === true);
+      player.score = calculateScore(player.score, player.housesBuilt, player.enteredRound === true);
     });
   }
 
   private nextTurn(game: GameState): void {
     // Find next player who has entered
     let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
-    while (!game.players[nextIndex].enteredTurn) {
+      while (!game.players[nextIndex].enteredRound) {
       nextIndex = (nextIndex + 1) % game.players.length;
     }
     game.currentPlayerIndex = nextIndex;
