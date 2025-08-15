@@ -101,6 +101,109 @@ export function canPlayCard(card: Card, leadSuit: Card['suit'] | null, trumpSuit
   return true;
 }
 
+export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | null, trumpSuit: Card['suit'] | null, currentHouse: Card[], enteredPlayers: number): number[] {
+  const playableIndex: number[] = [];
+
+  if (currentHouse.length === 0) {
+    for (let i = 0; i < playerHand.length; i++) {
+      playableIndex.push(i);
+    }
+    return playableIndex;
+  }
+  if (currentHouse.length >= 1 && currentHouse.length < enteredPlayers - 1) {
+    if (playerHand.some(card => card.suit === leadSuit)) {
+      const highestNonTrumpCard = findHighestCardInSuit(currentHouse, leadSuit, trumpSuit);
+      if (playerHand.some(card => card.suit === leadSuit && card.rank === 'A')) {
+        playableIndex.push(playerHand.findIndex(card => card.suit === leadSuit && card.rank === 'A'));
+        return playableIndex;
+      }
+      if (playerHand.some(card => card.suit === leadSuit && card.value > highestNonTrumpCard.value)) {
+        playerHand.forEach((card, index) => {
+          if (card.suit === leadSuit && card.value > highestNonTrumpCard.value) {
+            playableIndex.push(index);
+          }
+        });
+        return playableIndex;
+      }
+      else{
+        playerHand.forEach((card, index) => {
+          if (card.suit === leadSuit) {
+            playableIndex.push(index);
+          }
+        });
+        return playableIndex;
+      }
+    }
+    else{
+      const highestTrumpCard = findHighestCardInSuit(currentHouse, trumpSuit, null);
+      if(!highestTrumpCard){
+        if(playerHand.some(card => card.suit === trumpSuit)){
+          playerHand.forEach((card, index) => {
+            if (card.suit === trumpSuit) {
+              playableIndex.push(index);
+            }
+          });
+        }
+        else{
+          playerHand.forEach((card, index) => {
+              playableIndex.push(index);
+          });
+        }
+        return playableIndex;
+      }
+      else{
+        if(playerHand.some(card => card.suit === trumpSuit)){
+          if(findHighestCardInSuit(playerHand, trumpSuit, null).value > highestTrumpCard.value){
+            playerHand.forEach((card, index) => {
+              if (card.suit === trumpSuit && card.value > highestTrumpCard.value) {
+                playableIndex.push(index);
+              }
+            });
+            return playableIndex;
+          }
+          else{
+            playerHand.forEach((card, index) => {
+              if (card.suit === trumpSuit) {
+                playableIndex.push(index);
+              }
+            });
+            return playableIndex;
+          }
+        }
+        else{
+          playerHand.forEach((card, index) => {
+            playableIndex.push(index);
+          });
+          return playableIndex;
+        }
+      }
+    }
+  }
+
+  return playableIndex;
+}
+
+export function checkTrumpAce(playerHand: Card[], trumpSuit: Card['suit'] | null, currentHouse: Card[]): boolean {
+  const trumpAce = playerHand.find(card => card.suit === trumpSuit && card.rank === 'A');
+
+  if (currentHouse.length === 0 && trumpAce) {
+    return true;
+  }
+  return false;
+}
+
+export function findHighestCardInSuit(cards: Card[], suit: Card['suit'] | null, trumpSuit: Card['suit'] | null): Card {
+  const nonTrumpCards = cards.filter(card => card.suit !== trumpSuit);
+  let highest = nonTrumpCards[0];
+
+  for (const card of nonTrumpCards) {
+    if (card.suit === suit && card.value > highest.value) {
+      highest = card;
+    }
+  }
+  return highest;
+}
+
 export function findHighestCard(cards: Card[], trumpSuit: Card['suit'] | null): Card {
   if (cards.length === 0) return null!;
   

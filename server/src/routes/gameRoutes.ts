@@ -74,8 +74,8 @@ export function createGameRoutes(gameManager: GameManager): Router {
   router.get('/stats', (req, res) => {
     // This would need to be implemented in GameManager
     res.json({
-      activeGames: 0, // TODO: implement
-      totalPlayers: 0, // TODO: implement
+      activeGames: 0,
+      totalPlayers: 0, 
       uptime: process.uptime()
     });
   });
