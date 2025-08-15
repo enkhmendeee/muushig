@@ -1,5 +1,5 @@
 import { GameState, Player, House, ChatMessage } from '../types/game';
-import { createDeck, shuffleDeck, dealCards, canPlayCard, findHighestCard, calculateScore } from '../utils/deck';
+import { createDeck, shuffleDeck, dealCards, findHighestCard, calculateScore, findPlayableCards } from '../utils/deck';
 import { v4 as uuidv4 } from 'uuid';
 
 export class GameManager {
@@ -37,7 +37,8 @@ export class GameManager {
       createdAt: new Date(),
       lastActivity: new Date(),
       events: [],
-      chatMessages: []
+      chatMessages: [],
+      dealerIndex: 0
     };
     game.events.push({
       type: 'game_created',
@@ -149,16 +150,17 @@ export class GameManager {
     return true;
   }
 
+  shufflePlayers(game: GameState): void {
+    for (let i = game.players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [game.players[i], game.players[j]] = [game.players[j], game.players[i]];
+    }
+  }
+
   startGame(gameId: string): boolean {
     const game = this.games.get(gameId);
     if (!game || game.players.length < 2 || game.gamePhase !== 'ready') {
       return false;
-    }
-
-    // Shuffle players array
-    for (let i = game.players.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [game.players[i], game.players[j]] = [game.players[j], game.players[i]];
     }
 
     // Create deck based on player count
@@ -179,9 +181,8 @@ export class GameManager {
     game.gamePhase = 'dealing';
     game.currentPlayerIndex = 0;
     game.lastActivity = new Date();
-
-    game.players[0].isMouth = true;
-    game.players[game.players.length - 1].isDealer = true;
+    game.players[(game.dealerIndex + 1) % game.players.length].isMouth = true;
+    game.players[game.dealerIndex].isDealer = true;
     
     game.events.push({
       type: 'dealt_cards',
@@ -362,6 +363,22 @@ export class GameManager {
     return true;
   }
 
+  playableCards(gameId: string, playerId: string): number[] {
+    const game = this.games.get(gameId);
+    if (!game || game.gamePhase !== 'playing') {
+      return [];
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (!player) {
+      return [];
+    }
+    
+    const currentHouseCards = game.currentHouse.map(hc => hc.card);
+    const playableCards = findPlayableCards(player.hand, game.leadSuit, game.trumpCard?.suit || null, currentHouseCards, game.players.filter(p => p.enteredRound).length);
+    return playableCards;
+  }
+
   playCard(gameId: string, playerId: string, cardIndex: number): boolean {
     const game = this.games.get(gameId);
     if (!game || game.gamePhase !== 'playing') {
@@ -378,17 +395,19 @@ export class GameManager {
     }
 
     const card = player.hand[cardIndex];
-    const trumpSuit = game.trumpCard?.suit || null;
-    const currentHouse = game.currentHouse;
 
     // Check if card can be played
-    if (!canPlayCard(card, game.leadSuit, trumpSuit, player.hand, currentHouse)) {
+    if (!this.playableCards(gameId, playerId).includes(cardIndex)) {
       return false;
     }
 
     // Play the card
     player.hand.splice(cardIndex, 1);
-    game.currentHouse.push(card);
+    game.currentHouse.push({
+      card,
+      playerId: player.id,
+      playerName: player.name
+    });
     
     // Set lead suit if this is the first card
     if (game.currentHouse.length === 1) {
@@ -406,7 +425,7 @@ export class GameManager {
     }
 
     // Check if game is finished
-    if (game.players.every(p => !p.enteredRound || p.hand.length === 0)) {
+    if (game.houses.length === 5) {
       this.endGame(game);
     }
 
@@ -415,30 +434,37 @@ export class GameManager {
 
   private completeHouse(game: GameState): void {
     const trumpSuit = game.trumpCard?.suit || null;
-    const highestCard = findHighestCard(game.currentHouse, trumpSuit);
-    const winner = game.players.find(p => 
-      p.enteredRound && p.hand.some(card => 
-        card.suit === highestCard.suit && card.rank === highestCard.rank
-      )
+    const cards = game.currentHouse.map(hc => hc.card);
+    const highestCard = findHighestCard(cards, trumpSuit);
+    
+    // Find the player who played the highest card
+    const winningHouseCard = game.currentHouse.find(hc => 
+      hc.card.suit === highestCard.suit && hc.card.rank === highestCard.rank
     );
+    
+    if (winningHouseCard) {
+      const winner = game.players.find(p => p.id === winningHouseCard.playerId);
+      if (winner) {
+        winner.housesBuilt++;
+        
+        const house: House = {
+          cards: cards,
+          winner: winner.id,
+          suit: game.leadSuit!,
+          highestCard
+        };
+        
+        game.houses.push(house);
+      }
 
-    if (winner) {
-      winner.housesBuilt++;
-      
-      const house: House = {
-        cards: [...game.currentHouse],
-        winner: winner.id,
-        suit: game.leadSuit!,
-        highestCard
-      };
-      
-      game.houses.push(house);
+      // Reset for next house
+      game.currentHouse = [];
+      game.leadSuit = null;
+      const dealerIndex = game.players.findIndex(p => p.isDealer);
+      game.players.find(p => p.isMouth)!.isMouth = false;
+      game.players.find(p => p.isDealer)!.isDealer = false;
+      game.dealerIndex = (dealerIndex + 1) % game.players.length;
     }
-
-    // Reset for next house
-    game.currentHouse = [];
-    game.leadSuit = null;
-    game.currentPlayerIndex = game.players.findIndex(p => p.id === winner?.id) || 0;
   }
 
   private endGame(game: GameState): void {
@@ -448,6 +474,13 @@ export class GameManager {
     game.players.forEach(player => {
       player.score = calculateScore(player.score, player.housesBuilt, player.enteredRound === true);
     });
+    game.players.forEach(player => {
+      player.hand = [];
+    });
+    game.deck = [];
+    game.tree = [];
+    game.trumpCard = null;
+    game.gamePhase = 'waiting';
   }
 
   private nextTurn(game: GameState): void {

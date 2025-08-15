@@ -19,6 +19,12 @@ export interface Card {
   value: number;
 }
 
+export interface HouseCard {
+  card: Card;
+  playerId: string;
+  playerName: string;
+}
+
 export interface House {
   cards: Card[];
   winner: string; // player ID
@@ -36,13 +42,14 @@ export interface GameState {
   gamePhase: 'waiting' | 'ready' | 'dealing' | 'entering' | 'exchanging' | 'trump_exchanging' | 'playing' | 'finished';
   roundNumber: number;
   maxPlayers: number;
-  currentHouse: Card[]; // cards played in current house
+  currentHouse: HouseCard[]; // cards played in current house with player info
   houses: House[]; // completed houses
   leadSuit: Card['suit'] | null; // suit of first card in current house
   createdAt: Date;
   lastActivity: Date;
   events: GameEvent[];
   chatMessages: ChatMessage[];
+  dealerIndex: number;
 }
 
 export interface ChatMessage {
