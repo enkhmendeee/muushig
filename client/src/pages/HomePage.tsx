@@ -121,7 +121,6 @@ const HomePage: React.FC<{
             <button 
               onClick={debugGetAllGames} 
               className="debug-btn"
-              style={{ marginTop: '10px', fontSize: '12px', padding: '5px 10px' }}
             >
               Debug: Get All Games
             </button>

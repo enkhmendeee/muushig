@@ -14,12 +14,13 @@ const GameRoom: React.FC<{
   const [showChat, setShowChat] = useState(false);
   const [selectedCardsForExchange, setSelectedCardsForExchange] = useState<number[]>([]);
   const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const actualPlayerIndex = gameState.players.findIndex(player => player.id === currentPlayer.id);
 
   useEffect(() => {
     if (socket && gameState.gamePhase === 'playing') {
       socket.emit('get_playable_cards', { gameId: gameState.id });
     }
-  }, [socket, gameState.gamePhase, gameState.currentPlayerIndex]);
+  }, [socket, gameState.gamePhase, actualPlayerIndex]);
 
   useEffect(() => {
     if (!socket) return;
@@ -105,13 +106,23 @@ const GameRoom: React.FC<{
   const canExchange = gameState.gamePhase === 'exchanging' && currentPlayer.hasEntered && !currentPlayer.hasExchanged;
 
   // Calculate player positions around the table
-  const getPlayerPosition = (index: number, totalPlayers: number) => {
-    const angle = (index * 360) / totalPlayers - 90; // Start from top
+  const getPlayerPosition = (index: number, totalPlayers: number, actualPlayerIndex: number) => {
+    // Calculate relative position (how many positions away from current player)
+    let relativeIndex = index - actualPlayerIndex;
+    if (relativeIndex < 0) {
+      relativeIndex += totalPlayers;
+    }
+    
+    // Position current player at bottom (270 degrees), others relative to that
+    const angle = (relativeIndex * 360) / totalPlayers + 270; // Start from bottom
+    
     // Adjust radius based on number of players to prevent overlapping
     const baseRadius = 250;
     const radius = totalPlayers <= 3 ? baseRadius : baseRadius + (totalPlayers - 3) * 30;
+    
     const x = Math.cos((angle * Math.PI) / 180) * radius;
     const y = Math.sin((angle * Math.PI) / 180) * radius;
+    
     return { x, y };
   };
 
@@ -204,7 +215,7 @@ const GameRoom: React.FC<{
 
           {/* Players Around the Table */}
           {gameState.players.map((player, index) => {
-            const position = getPlayerPosition(index, gameState.players.length);
+            const position = getPlayerPosition(index, gameState.players.length, actualPlayerIndex);
             const isCurrentPlayer = player.id === currentPlayer.id;
             const isActiveTurn = gameState.currentPlayerIndex === index;
             
@@ -213,8 +224,9 @@ const GameRoom: React.FC<{
                 key={player.id}
                 className={`player-position ${isCurrentPlayer ? 'current-player' : ''} ${isActiveTurn ? 'active-turn' : ''}`}
                 style={{
-                  transform: `translate(${position.x}px, ${position.y}px)`
-                }}
+                  '--x': `${position.x}px`,
+                  '--y': `${position.y}px`
+                } as React.CSSProperties}
               >
                 <div className="player-avatar">
                   {player.isHost && <span className="crown">👑</span>}

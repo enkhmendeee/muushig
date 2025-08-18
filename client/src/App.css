@@ -209,422 +209,6 @@ body {
   font-weight: 500;
 }
 
-/* Game Room */
-.game-room {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.game-header {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.game-info h2 {
-  color: #333;
-  margin-bottom: 5px;
-}
-
-.phase-badge {
-  padding: 5px 15px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.phase-badge.waiting { background: #ffc107; color: #333; }
-.phase-badge.ready { background: #28a745; color: white; }
-.phase-badge.dealing { background: #17a2b8; color: white; }
-.phase-badge.entering { background: #6f42c1; color: white; }
-.phase-badge.exchanging { background: #fd7e14; color: white; }
-.phase-badge.trump_exchanging { background: #e83e8c; color: white; }
-.phase-badge.playing { background: #dc3545; color: white; }
-.phase-badge.finished { background: #6c757d; color: white; }
-
-.leave-btn {
-  padding: 10px 20px;
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.leave-btn:hover {
-  background: #c82333;
-  transform: translateY(-1px);
-}
-
-.game-area {
-  flex: 1;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* Players Section */
-.players-section {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.player-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 15px;
-  padding: 20px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-  border: 3px solid transparent;
-}
-
-.player-card.current-player {
-  border-color: #667eea;
-  box-shadow: 0 15px 30px rgba(102, 126, 234, 0.3);
-}
-
-.player-card.active-turn {
-  border-color: #28a745;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 15px 30px rgba(40, 167, 69, 0.3); }
-  50% { box-shadow: 0 15px 30px rgba(40, 167, 69, 0.6); }
-}
-
-.player-card.entered {
-  border-color: #28a745;
-}
-
-.player-card.declined {
-  border-color: #dc3545;
-  opacity: 0.7;
-}
-
-.player-info {
-  margin-bottom: 15px;
-}
-
-.player-name {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #333;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 5px;
-}
-
-.host-badge, .dealer-badge, .mouth-badge {
-  font-size: 1rem;
-}
-
-.player-score, .player-houses {
-  color: #666;
-  font-size: 0.9rem;
-  margin-right: 15px;
-}
-
-.player-hand {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 15px;
-}
-
-.card {
-  width: 60px;
-  height: 80px;
-  background: white;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  font-weight: 600;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-}
-
-.card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-}
-
-.card.playable {
-  border-color: #28a745;
-  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
-}
-
-.card.my-turn {
-  animation: bounce 1s infinite;
-}
-
-@keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-.card-rank {
-  font-size: 1.2rem;
-  margin-bottom: 2px;
-}
-
-.card-suit {
-  font-size: 1.5rem;
-}
-
-.card.red .card-rank,
-.card.red .card-suit {
-  color: #dc3545;
-}
-
-.card.black .card-rank,
-.card.black .card-suit {
-  color: #333;
-}
-
-.card.trump {
-  border-color: #ffc107;
-  box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3);
-}
-
-.card-count {
-  color: #666;
-  font-style: italic;
-}
-
-.player-status {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.ready-badge, .entered-badge, .declined-badge {
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.ready-badge {
-  background: #28a745;
-  color: white;
-}
-
-.entered-badge {
-  background: #17a2b8;
-  color: white;
-}
-
-.declined-badge {
-  background: #dc3545;
-  color: white;
-}
-
-/* Game Controls */
-.game-controls {
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.ready-btn, .start-btn, .enter-btn, .skip-btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.ready-btn {
-  background: #28a745;
-  color: white;
-}
-
-.ready-btn:hover {
-  background: #218838;
-  transform: translateY(-2px);
-}
-
-.start-btn {
-  background: #007bff;
-  color: white;
-}
-
-.start-btn:hover {
-  background: #0056b3;
-  transform: translateY(-2px);
-}
-
-.decision-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.enter-btn {
-  background: #28a745;
-  color: white;
-}
-
-.enter-btn:hover {
-  background: #218838;
-  transform: translateY(-2px);
-}
-
-.skip-btn {
-  background: #dc3545;
-  color: white;
-}
-
-.skip-btn:hover {
-  background: #c82333;
-  transform: translateY(-2px);
-}
-
-/* Trump Card and Current House */
-.trump-card, .current-house {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 15px;
-  padding: 20px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-  text-align: center;
-}
-
-.trump-card h3, .current-house h3 {
-  margin-bottom: 15px;
-  color: #333;
-  font-size: 1.2rem;
-}
-
-.house-cards {
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.house-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.card-player {
-  font-size: 0.9rem;
-  color: #666;
-  font-weight: 500;
-}
-
-/* Chat Section */
-.chat-section {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 15px 15px 0 0;
-  margin-top: auto;
-  box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.1);
-}
-
-.chat-messages {
-  height: 200px;
-  overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.chat-message {
-  padding: 10px 15px;
-  border-radius: 10px;
-  max-width: 80%;
-  word-wrap: break-word;
-}
-
-.chat-message.chat {
-  background: #e3f2fd;
-  align-self: flex-start;
-}
-
-.chat-message.system {
-  background: #fff3e0;
-  align-self: center;
-  text-align: center;
-  font-style: italic;
-}
-
-.message-sender {
-  font-weight: 600;
-  color: #333;
-  margin-right: 8px;
-}
-
-.message-text {
-  color: #555;
-}
-
-.chat-input {
-  display: flex;
-  gap: 10px;
-  padding: 20px;
-  border-top: 1px solid #eee;
-}
-
-.message-input {
-  flex: 1;
-  padding: 12px 16px;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: all 0.3s ease;
-}
-
-.message-input:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.send-btn {
-  padding: 12px 20px;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.send-btn:hover {
-  background: #5a6fd8;
-  transform: translateY(-1px);
-}
-
 /* New Game Room Design */
 .game-room-new {
   min-height: 100vh;
@@ -687,15 +271,6 @@ body {
   100% { transform: scale(1); }
 }
 
-.room-badge {
-  background: #4a90e2;
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
 .phase-badge-new {
   background: #f39c12;
   color: white;
@@ -733,8 +308,8 @@ body {
 
 .game-table {
   position: relative;
-  width: 700px;
-  height: 700px;
+  width: 500px;
+  height: 500px;
   background: radial-gradient(circle, #2d5a27 0%, #1a3d1a 100%);
   border-radius: 50%;
   border: 8px solid #8b4513;
@@ -919,6 +494,7 @@ body {
   gap: 0.5rem;
   transition: all 0.3s ease;
   z-index: 5;
+  transform: translate(var(--x, 0px), var(--y, 0px));
 }
 
 .player-position.current-player {
@@ -930,8 +506,8 @@ body {
 }
 
 @keyframes activeTurn {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  0%, 100% { transform: scale(1) translate(var(--x, 0px), var(--y, 0px)); }
+  50% { transform: scale(1.05) translate(var(--x, 0px), var(--y, 0px)); }
 }
 
 /* Player Avatar */
@@ -1457,6 +1033,13 @@ body {
   background: #2980b9;
 }
 
+/* Debug Button */
+.debug-btn {
+  margin-top: 10px;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
 /* Card Styles */
 .card-rank, .card-suit {
   font-weight: bold;
@@ -1480,31 +1063,8 @@ body {
     font-size: 2.5rem;
   }
   
-  .players-section {
-    grid-template-columns: 1fr;
-  }
-  
   .join-section {
     flex-direction: column;
-  }
-  
-  .game-controls {
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .decision-buttons {
-    flex-direction: column;
-    width: 100%;
-    max-width: 200px;
-  }
-  
-  .house-cards {
-    justify-content: flex-start;
-  }
-  
-  .chat-messages {
-    height: 150px;
   }
 
   .game-table {
@@ -1513,7 +1073,7 @@ body {
   }
   
   .player-position {
-    transform: scale(0.8);
+    transform: scale(0.8) translate(var(--x, 0px), var(--y, 0px));
   }
   
   .chat-panel {
@@ -1541,19 +1101,6 @@ body {
   .game-title {
     font-size: 2rem;
   }
-  
-  .card {
-    width: 50px;
-    height: 70px;
-  }
-  
-  .card-rank {
-    font-size: 1rem;
-  }
-  
-  .card-suit {
-    font-size: 1.2rem;
-  }
 
   .game-table {
     width: 300px;
@@ -1561,7 +1108,7 @@ body {
   }
   
   .player-position {
-    transform: scale(0.6);
+    transform: scale(0.6) translate(var(--x, 0px), var(--y, 0px));
   }
   
   .chat-panel {

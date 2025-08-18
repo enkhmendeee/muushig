@@ -49,8 +49,8 @@ export class GameSocketHandler {
           socket.emit('game_joined', { gameId: data.gameId, player });
           socket.emit('game_state', this.sanitizeGameState(game, player.id));
           
-          // Notify other players
-          socket.to(data.gameId).emit('player_joined', { player });
+          // Broadcast updated game state to all players
+          this.broadcastGameState(data.gameId);
         }
       } else {
         console.log(`Failed to join game: ${data.gameId}`);
@@ -323,6 +323,9 @@ export class GameSocketHandler {
         
         // Notify other players
         socket.to(gameId).emit('player_left', { playerId });
+        
+        // Broadcast updated game state to remaining players
+        this.broadcastGameState(gameId);
         
         // Clean up
         this.playerSockets.delete(socket.id);
