@@ -12,6 +12,8 @@ const GameRoom: React.FC<{
   const [chatMessage, setChatMessage] = useState('');
   const [playableCards, setPlayableCards] = useState<number[]>([]);
   const [showChat, setShowChat] = useState(false);
+  const [selectedCardsForExchange, setSelectedCardsForExchange] = useState<number[]>([]);
+  const [showExchangeModal, setShowExchangeModal] = useState(false);
 
   useEffect(() => {
     if (socket && gameState.gamePhase === 'playing') {
@@ -58,6 +60,32 @@ const GameRoom: React.FC<{
     socket.emit('play_card', { gameId: gameState.id, cardIndex });
   };
 
+  const handleCardSelectForExchange = (cardIndex: number) => {
+    setSelectedCardsForExchange(prev => {
+      if (prev.includes(cardIndex)) {
+        return prev.filter(index => index !== cardIndex);
+      } else {
+        return [...prev, cardIndex];
+      }
+    });
+  };
+
+  const handleExchangeCards = () => {
+    if (!socket || selectedCardsForExchange.length === 0) return;
+    socket.emit('exchange_cards', { 
+      gameId: gameState.id, 
+      cardIndices: selectedCardsForExchange 
+    });
+    setSelectedCardsForExchange([]);
+    setShowExchangeModal(false);
+  };
+
+  const handleSkipExchange = () => {
+    if (!socket) return;
+    socket.emit('exchange_cards', { gameId: gameState.id, cardIndices: [] });
+    setShowExchangeModal(false);
+  };
+
   const handleSendChat = () => {
     if (!socket || !chatMessage.trim()) return;
     socket.emit('send_chat', { gameId: gameState.id, message: chatMessage.trim() });
@@ -74,11 +102,14 @@ const GameRoom: React.FC<{
   const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === currentPlayer.id;
   const canStartGame = currentPlayer.isHost && gameState.gamePhase === 'ready';
   const canMakeDecision = gameState.gamePhase === 'dealing' && currentPlayer.enteredRound === undefined;
+  const canExchange = gameState.gamePhase === 'exchanging' && currentPlayer.hasEntered && !currentPlayer.hasExchanged;
 
   // Calculate player positions around the table
   const getPlayerPosition = (index: number, totalPlayers: number) => {
     const angle = (index * 360) / totalPlayers - 90; // Start from top
-    const radius = 200; // Distance from center
+    // Adjust radius based on number of players to prevent overlapping
+    const baseRadius = 250;
+    const radius = totalPlayers <= 3 ? baseRadius : baseRadius + (totalPlayers - 3) * 30;
     const x = Math.cos((angle * Math.PI) / 180) * radius;
     const y = Math.sin((angle * Math.PI) / 180) * radius;
     return { x, y };
@@ -89,8 +120,29 @@ const GameRoom: React.FC<{
       {/* Header */}
       <div className="game-header-new">
         <div className="room-info">
-          <span className="room-badge">Room: {gameState.id.slice(0, 8)}</span>
           <span className="phase-badge-new">{gameState.gamePhase.replace('_', ' ')}</span>
+        </div>
+        <div className="room-id-center">
+          <button 
+            className="room-badge-clickable"
+            onClick={() => {
+              navigator.clipboard.writeText(gameState.id);
+              // Optional: Show a brief notification
+              const button = document.querySelector('.room-badge-clickable');
+              if (button) {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+                setTimeout(() => {
+                  button.textContent = originalText;
+                  button.classList.remove('copied');
+                }, 2000);
+              }
+            }}
+            title="Click to copy game ID"
+          >
+            Room: {gameState.id}
+          </button>
         </div>
         <button onClick={onLeaveGame} className="leave-btn-new">Leave Game</button>
       </div>
@@ -179,7 +231,7 @@ const GameRoom: React.FC<{
                   <div className="player-houses-new">Houses: {player.housesBuilt}</div>
                 </div>
 
-                {/* Player Hand */}
+                                  {/* Player Hand */}
                 <div className="player-hand-new">
                   {isCurrentPlayer ? (
                     // Show actual cards for current player
@@ -189,9 +241,15 @@ const GameRoom: React.FC<{
                           key={`${card.suit}-${card.rank}-${cardIndex}`}
                           className={`card hand-card ${playableCards.includes(cardIndex) ? 'playable' : ''} ${
                             isMyTurn ? 'my-turn' : ''
-                          }`}
-                          onClick={() => isMyTurn && playableCards.includes(cardIndex) && handlePlayCard(cardIndex)}
-                          disabled={!isMyTurn || !playableCards.includes(cardIndex)}
+                          } ${selectedCardsForExchange.includes(cardIndex) ? 'selected-for-exchange' : ''}`}
+                          onClick={() => {
+                            if (canExchange) {
+                              handleCardSelectForExchange(cardIndex);
+                            } else if (isMyTurn && playableCards.includes(cardIndex)) {
+                              handlePlayCard(cardIndex);
+                            }
+                          }}
+                          disabled={!isMyTurn || (!canExchange && !playableCards.includes(cardIndex))}
                           aria-label={`Play ${card.rank} of ${card.suit}`}
                         >
                           <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
@@ -245,7 +303,60 @@ const GameRoom: React.FC<{
             <button onClick={handleSkipTurn} className="skip-btn-new">Skip</button>
           </div>
         )}
+
+        {canExchange && (
+          <div className="exchange-controls">
+            <button 
+              onClick={handleExchangeCards} 
+              disabled={selectedCardsForExchange.length === 0}
+              className="exchange-btn"
+            >
+              Exchange {selectedCardsForExchange.length} Cards
+            </button>
+            <button onClick={handleSkipExchange} className="skip-exchange-btn">
+              Skip Exchange
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Exchange Modal */}
+      {showExchangeModal && (
+        <div className="exchange-modal-overlay">
+          <div className="exchange-modal">
+            <h3>Exchange Cards</h3>
+            <p>Select cards to exchange with the tree. You can exchange up to {gameState.tree.length} cards.</p>
+            <div className="exchange-cards-preview">
+              {Array.isArray(currentPlayer.hand) && currentPlayer.hand.map((card, index) => (
+                <button
+                  key={index}
+                  className={`card exchange-card ${selectedCardsForExchange.includes(index) ? 'selected' : ''}`}
+                  onClick={() => handleCardSelectForExchange(index)}
+                >
+                  <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
+                    {card.rank}
+                  </span>
+                  <span className={`card-suit ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
+                    {getSuitSymbol(card.suit)}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="exchange-modal-buttons">
+              <button 
+                onClick={handleExchangeCards}
+                disabled={selectedCardsForExchange.length === 0}
+                className="confirm-exchange-btn"
+              >
+                Exchange {selectedCardsForExchange.length} Cards
+              </button>
+              <button onClick={handleSkipExchange} className="skip-exchange-btn">
+                Skip Exchange
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chat Toggle */}
       <button 
