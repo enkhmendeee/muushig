@@ -65,8 +65,14 @@ export class GameSocketHandler {
         const updatedGame = this.gameManager.getGame(data.gameId);
         if (updatedGame) {
           // Broadcast game state to all players
-          socket.to(data.gameId).emit('game_started');
-          socket.emit('game_started');
+          socket.to(data.gameId).emit('dealt_cards', { 
+            gameId: data.gameId, 
+            trumpCard: updatedGame.trumpCard 
+          });
+          socket.emit('dealt_cards', { 
+            gameId: data.gameId, 
+            trumpCard: updatedGame.trumpCard 
+          });
           
           // Send updated game state to all players
           this.broadcastGameState(data.gameId);
@@ -239,9 +245,26 @@ export class GameSocketHandler {
             cardIndex: data.cardIndex 
           });
           
+          // Check if house was completed
+          if (game.currentHouse.length === 0 && game.houses.length > 0) {
+            const lastHouse = game.houses[game.houses.length - 1];
+            const winner = game.players.find(p => p.id === lastHouse.winner);
+            socket.to(data.gameId).emit('house_completed', { 
+              house: lastHouse, 
+              winner: winner 
+            });
+            socket.emit('house_completed', { 
+              house: lastHouse, 
+              winner: winner 
+            });
+          }
+          
           // Check if game is finished
           if (game.gamePhase === 'finished') {
-            const winner = game.players.find(p => p.hand.length === 0);
+            // Find player with most houses built (winner)
+            const winner = game.players.reduce((prev, current) => 
+              (prev.housesBuilt > current.housesBuilt) ? prev : current
+            );
             socket.to(data.gameId).emit('game_ended', { winner });
             socket.emit('game_ended', { winner });
           } else {
@@ -345,6 +368,42 @@ export class GameSocketHandler {
       const chatHistory = this.gameManager.getChatHistory(data.gameId);
       socket.emit('chat_history', { gameId: data.gameId, messages: chatHistory });
     });
+
+    // Handle getting playable cards
+    socket.on('get_playable_cards', (data: { gameId: string }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const playableCards = this.gameManager.playableCards(data.gameId, playerSocket.playerId);
+      socket.emit('playable_cards', { gameId: data.gameId, playableCards });
+    });
+
+    // Handle getting game info (for debugging)
+    socket.on('get_game_info', (data: { gameId: string }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const game = this.gameManager.getGame(data.gameId);
+      if (game) {
+        socket.emit('game_info', {
+          gameId: data.gameId,
+          phase: game.gamePhase,
+          players: game.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            isDealer: p.isDealer,
+            isMouth: p.isMouth,
+            enteredRound: p.enteredRound,
+            hasExchanged: p.hasExchanged,
+            housesBuilt: p.housesBuilt
+          })),
+          currentHouse: game.currentHouse,
+          houses: game.houses,
+          trumpCard: game.trumpCard,
+          dealerIndex: game.dealerIndex
+        });
+      }
+    });
   }
 
   private sanitizeGameState(game: GameState, playerId: string): any {
@@ -375,6 +434,7 @@ export class GameSocketHandler {
       currentHouse: game.currentHouse,
       houses: game.houses,
       leadSuit: game.leadSuit,
+      dealerIndex: game.dealerIndex,
       createdAt: game.createdAt.toISOString(),
       lastActivity: game.lastActivity.toISOString(),
       events: game.events.map(event => ({
