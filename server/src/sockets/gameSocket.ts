@@ -263,7 +263,7 @@ export class GameSocketHandler {
           if (game.gamePhase === 'finished') {
             // Find player with most houses built (winner)
             const winner = game.players.reduce((prev, current) => 
-              (prev.housesBuilt > current.housesBuilt) ? prev : current
+              (prev.housesBuilt > current.housesBuilt) ? prev : current, game.players[0]
             );
             socket.to(data.gameId).emit('game_ended', { winner });
             socket.emit('game_ended', { winner });

@@ -198,6 +198,17 @@ body {
   cursor: not-allowed;
 }
 
+.error-message {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border: 1px solid #f5c6cb;
+  text-align: center;
+  font-weight: 500;
+}
+
 /* Game Room */
 .game-room {
   min-height: 100vh;
