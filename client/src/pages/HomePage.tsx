@@ -21,15 +21,23 @@ const HomePage: React.FC<{
   const joinGame = async () => {
     if (!socket || !playerName.trim() || !gameId.trim()) return;
     
+    console.log('Attempting to join game:', { gameId: gameId.trim(), playerName: playerName.trim() });
     setError('');
     setIsJoining(true);
     socket.emit('join_game', { gameId: gameId.trim(), playerName: playerName.trim() });
+  };
+
+  const debugGetAllGames = () => {
+    if (!socket) return;
+    console.log('Requesting all games...');
+    socket.emit('get_all_games');
   };
 
   useEffect(() => {
     if (!socket) return;
 
     const handleJoinError = (data: { message: string }) => {
+      console.log('Join error received:', data);
       setError(data.message);
       setIsJoining(false);
     };
@@ -44,14 +52,20 @@ const HomePage: React.FC<{
       setError('');
     };
 
+    const handleAllGames = (data: { games: string[] }) => {
+      console.log('All available games:', data.games);
+    };
+
     socket.on('join_error', handleJoinError);
     socket.on('game_joined', handleGameJoined);
     socket.on('game_created', handleGameCreated);
+    socket.on('all_games', handleAllGames);
 
     return () => {
       socket.off('join_error', handleJoinError);
       socket.off('game_joined', handleGameJoined);
       socket.off('game_created', handleGameCreated);
+      socket.off('all_games', handleAllGames);
     };
   }, [socket]);
 
@@ -103,6 +117,13 @@ const HomePage: React.FC<{
               className="join-btn"
             >
               {isJoining ? 'Joining...' : 'Join Game'}
+            </button>
+            <button 
+              onClick={debugGetAllGames} 
+              className="debug-btn"
+              style={{ marginTop: '10px', fontSize: '12px', padding: '5px 10px' }}
+            >
+              Debug: Get All Games
             </button>
           </div>
         </div>

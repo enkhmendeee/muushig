@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
-import { Player, Card, HouseCard, GameState, ChatMessage } from '../types/game';
+import { Player, GameState, ChatMessage } from '../types/game';
 import { getSuitSymbol } from '../utils/gameUtils';
 
 const GameRoom: React.FC<{
@@ -79,7 +79,7 @@ const GameRoom: React.FC<{
       {/* Header */}
       <div className="game-header">
         <div className="game-info">
-          <h2>Game: {gameState.id.slice(0, 8)}</h2>
+          <h2>Game: {gameState.id}</h2>
           <span className={`phase-badge ${gameState.gamePhase}`}>
             {gameState.gamePhase.replace('_', ' ')}
           </span>

@@ -15,24 +15,32 @@ export class GameSocketHandler {
 
     // Handle game creation
     socket.on('create_game', (data: { hostName: string; maxPlayers?: number }) => {
+      console.log('Creating game with data:', data);
       const gameId = this.gameManager.createGame(data.hostName, data.maxPlayers || 5);
+      console.log('Created game with ID:', gameId);
       const game = this.gameManager.getGame(gameId);
       
       if (game) {
+        console.log('Game found after creation, setting up player socket');
         const player = game.players[0]; // Host is the first player
         this.playerSockets.set(socket.id, { socket, gameId, playerId: player.id });
         
         socket.join(gameId);
         socket.emit('game_created', { gameId, player });
         socket.emit('game_state', this.sanitizeGameState(game, player.id));
+        console.log('Game creation completed successfully');
+      } else {
+        console.log('ERROR: Game not found after creation!');
       }
     });
 
     // Handle joining a game
     socket.on('join_game', (data: { gameId: string; playerName: string }) => {
+      console.log(`Socket join_game request:`, data);
       const player = this.gameManager.joinGame(data.gameId, data.playerName);
       
       if (player) {
+        console.log(`Player joined successfully:`, player.name);
         const game = this.gameManager.getGame(data.gameId);
         if (game) {
           this.playerSockets.set(socket.id, { socket, gameId: data.gameId, playerId: player.id });
@@ -45,6 +53,7 @@ export class GameSocketHandler {
           socket.to(data.gameId).emit('player_joined', { player });
         }
       } else {
+        console.log(`Failed to join game: ${data.gameId}`);
         socket.emit('join_error', { message: 'Could not join game' });
       }
     });
@@ -403,6 +412,13 @@ export class GameSocketHandler {
           dealerIndex: game.dealerIndex
         });
       }
+    });
+
+    // Handle getting all games (for debugging)
+    socket.on('get_all_games', () => {
+      const allGames = this.gameManager.getAllGames();
+      console.log('All available games:', allGames);
+      socket.emit('all_games', { games: allGames });
     });
   }
 

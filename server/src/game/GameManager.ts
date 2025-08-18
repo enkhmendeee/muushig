@@ -7,6 +7,7 @@ export class GameManager {
 
   createGame(hostName: string, maxPlayers: number = 5): string {
     const gameId = uuidv4();
+    console.log(`Creating new game with ID: ${gameId} for host: ${hostName}`);
     
     const game: GameState = {
       id: gameId,
@@ -46,12 +47,27 @@ export class GameManager {
       timestamp: new Date()
     });
     this.games.set(gameId, game);
+    console.log(`Game created successfully. Total games: ${this.games.size}`);
+    console.log(`Available game IDs:`, Array.from(this.games.keys()));
     return gameId;
   }
 
   joinGame(gameId: string, playerName: string): Player | null {
+    console.log(`Attempting to join game: ${gameId} with player: ${playerName}`);
     const game = this.games.get(gameId);
-    if (!game || (game.gamePhase !== 'waiting' && game.gamePhase !== 'ready') || game.players.length >= game.maxPlayers) {
+    
+    if (!game) {
+      console.log(`Game not found: ${gameId}`);
+      return null;
+    }
+    
+    if (game.gamePhase !== 'waiting' && game.gamePhase !== 'ready') {
+      console.log(`Game phase not suitable for joining: ${game.gamePhase}`);
+      return null;
+    }
+    
+    if (game.players.length >= game.maxPlayers) {
+      console.log(`Game is full: ${game.players.length}/${game.maxPlayers} players`);
       return null;
     }
 
@@ -553,6 +569,10 @@ export class GameManager {
 
   getGame(gameId: string): GameState | null {
     return this.games.get(gameId) || null;
+  }
+
+  getAllGames(): string[] {
+    return Array.from(this.games.keys());
   }
 
   removePlayer(gameId: string, playerId: string): boolean {
