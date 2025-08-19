@@ -18,7 +18,6 @@ export class GameManager {
         score: 15, // Start with 15 points
         isHost: true,
         isReady: false,
-        hasEntered: true,
         housesBuilt: 0,
         isDealer: false,
         isMouth: false,
@@ -41,11 +40,6 @@ export class GameManager {
       chatMessages: [],
       dealerIndex: 0
     };
-    game.events.push({
-      type: 'game_created',
-      data: { gameId: game.id, hostName },
-      timestamp: new Date()
-    });
     this.games.set(gameId, game);
     console.log(`Game created successfully. Total games: ${this.games.size}`);
     console.log(`Available game IDs:`, Array.from(this.games.keys()));
@@ -78,7 +72,6 @@ export class GameManager {
       score: 15,
       isHost: false,
       isReady: false,
-      hasEntered: true,
       housesBuilt: 0,
       isDealer: false,
       isMouth: false,

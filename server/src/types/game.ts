@@ -5,7 +5,6 @@ export interface Player {
   score: number;
   isHost: boolean;
   isReady: boolean;
-  hasEntered: boolean;
   hasExchanged: boolean;
   housesBuilt: number;
   isDealer: boolean;

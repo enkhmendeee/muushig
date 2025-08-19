@@ -436,7 +436,6 @@ export class GameSocketHandler {
         score: player.score,
         isHost: player.isHost,
         isReady: player.isReady,
-        hasEntered: player.hasEntered,
         housesBuilt: player.housesBuilt,
         isDealer: player.isDealer,
         isMouth: player.isMouth,

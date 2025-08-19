@@ -228,8 +228,8 @@ export function findHighestCard(cards: Card[], trumpSuit: Card['suit'] | null): 
   return highest;
 }
 
-export function calculateScore(initialScore: number, housesBuilt: number, hasEntered: boolean): number {
-  if (!hasEntered) {
+export function calculateScore(initialScore: number, housesBuilt: number, enteredRound: boolean): number {
+  if (!enteredRound) {
     return initialScore; // No change if didn't enter
   }
   
