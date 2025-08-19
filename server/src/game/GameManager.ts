@@ -1,9 +1,11 @@
 import { GameState, Player, House, ChatMessage } from '../types/game';
 import { createDeck, shuffleDeck, dealCards, findHighestCard, calculateScore, findPlayableCards } from '../utils/deck';
+import { BotManager } from './BotManager';
 import { v4 as uuidv4 } from 'uuid';
 
 export class GameManager {
   private readonly games: Map<string, GameState> = new Map();
+  private readonly botManager: BotManager = new BotManager();
 
   createGame(hostName: string, maxPlayers: number = 5): string {
     const gameId = uuidv4();
@@ -23,6 +25,7 @@ export class GameManager {
         isMouth: false,
         enteredRound: undefined,
         hasExchanged: false,
+        isBot: false,
       }],
       currentPlayerIndex: 0,
       deck: [],
@@ -30,7 +33,7 @@ export class GameManager {
       trumpCard: null,
       gamePhase: 'waiting',
       roundNumber: 1,
-      maxPlayers,
+      maxPlayers: 5, // Always 5 players
       currentHouse: [],
       houses: [],
       leadSuit: null,
@@ -40,8 +43,12 @@ export class GameManager {
       chatMessages: [],
       dealerIndex: 0
     };
+
+    // Fill the game with bots to reach 5 players
+    this.botManager.fillGameWithBots(game);
+    
     this.games.set(gameId, game);
-    console.log(`Game created successfully. Total games: ${this.games.size}`);
+    console.log(`Game created successfully with ${game.players.length} players (including bots). Total games: ${this.games.size}`);
     console.log(`Available game IDs:`, Array.from(this.games.keys()));
     return gameId;
   }
@@ -60,8 +67,10 @@ export class GameManager {
       return null;
     }
     
-    if (game.players.length >= game.maxPlayers) {
-      console.log(`Game is full: ${game.players.length}/${game.maxPlayers} players`);
+    // Check if we have a bot to replace
+    const botToReplace = this.botManager.getBotToReplace(game);
+    if (!botToReplace) {
+      console.log(`No bot available to replace in game: ${gameId}`);
       return null;
     }
 
@@ -77,21 +86,35 @@ export class GameManager {
       isMouth: false,
       enteredRound: undefined,
       hasExchanged: false,
+      isBot: false,
     };
 
-    game.events.push({
-      type: 'player_joined',
-      data: { playerName, gameId: game.id },
-      timestamp: new Date()
-    });
+    // Replace the bot with the real player
+    const botIndex = game.players.findIndex(p => p.id === botToReplace.id);
+    if (botIndex !== -1) {
+      game.players[botIndex] = player;
+      
+      game.events.push({
+        type: 'bot_left',
+        data: { botName: botToReplace.name, gameId: game.id },
+        timestamp: new Date()
+      });
 
-    game.players.push(player);
-    game.lastActivity = new Date();
+      game.events.push({
+        type: 'player_joined',
+        data: { playerName, gameId: game.id },
+        timestamp: new Date()
+      });
+
+      game.lastActivity = new Date();
+      
+      // Send system message
+      this.sendSystemMessage(gameId, `${botToReplace.name} (Bot) left and ${playerName} joined the game`);
+      
+      return player;
+    }
     
-    // Send system message
-    this.sendSystemMessage(gameId, `${playerName} joined the game`);
-    
-    return player;
+    return null;
   }
 
   readyCheck(gameId: string, playerId: string, isReady: boolean): boolean {
@@ -168,7 +191,7 @@ export class GameManager {
 
   startGame(gameId: string): boolean {
     const game = this.games.get(gameId);
-    if (!game || game.players.length < 2 || game.gamePhase !== 'ready') {
+    if (!game || game.players.length !== 5 || game.gamePhase !== 'ready') {
       return false;
     }
 
@@ -251,6 +274,8 @@ export class GameManager {
 
       if (game.players.every(p => p.enteredRound !== undefined)) {
       game.gamePhase = 'exchanging';
+      // Trigger bot turn if next player is a bot
+      this.checkAndTriggerBotTurn(gameId);
     }
     return true;
   }
@@ -287,6 +312,8 @@ export class GameManager {
 
     if (game.players.every(p => p.enteredRound !== undefined)) {
       game.gamePhase = 'exchanging';
+      // Trigger bot turn if next player is a bot
+      this.checkAndTriggerBotTurn(gameId);
     }
 
     return true;
@@ -331,6 +358,8 @@ export class GameManager {
         data: { gameId: game.id },
         timestamp: new Date()
       }); 
+      // Trigger bot turn if dealer is a bot
+      this.checkAndTriggerBotTurn(gameId);
     }
     return true;
   }
@@ -431,6 +460,8 @@ export class GameManager {
     } else {
       // Move to next player
       this.nextTurn(game);
+      // Trigger bot turn if next player is a bot
+      this.checkAndTriggerBotTurn(gameId);
     }
 
     // Check if game is finished
@@ -609,6 +640,88 @@ export class GameManager {
       if (game.lastActivity < inactiveThreshold) {
         this.games.delete(gameId);
       }
+    }
+  }
+
+  // Bot decision making methods
+  async handleBotTurn(gameId: string): Promise<void> {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    if (!currentPlayer.isBot) return;
+
+    console.log(`Bot ${currentPlayer.name} is thinking...`);
+
+    switch (game.gamePhase) {
+      case 'dealing':
+        await this.handleBotEnterDecision(gameId, currentPlayer);
+        break;
+      case 'exchanging':
+        await this.handleBotExchange(gameId, currentPlayer);
+        break;
+      case 'trump_exchanging':
+        await this.handleBotTrumpExchange(gameId, currentPlayer);
+        break;
+      case 'playing':
+        await this.handleBotPlayCard(gameId, currentPlayer);
+        break;
+    }
+  }
+
+  private async handleBotEnterDecision(gameId: string, botPlayer: Player): Promise<void> {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    const decision = await this.botManager.makeBotDecision(game, botPlayer, 'enter');
+    
+    if (decision) {
+      this.enterTurn(gameId, botPlayer.id);
+    } else {
+      this.skipTurn(gameId, botPlayer.id);
+    }
+  }
+
+  private async handleBotExchange(gameId: string, botPlayer: Player): Promise<void> {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    const cardIndices = await this.botManager.makeBotDecision(game, botPlayer, 'exchange');
+    this.exchangeCards(gameId, botPlayer.id, cardIndices);
+  }
+
+  private async handleBotTrumpExchange(gameId: string, botPlayer: Player): Promise<void> {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    const cardIndex = await this.botManager.makeBotDecision(game, botPlayer, 'trump_exchange');
+    if (cardIndex >= 0) {
+      this.exchangeTrump(gameId, botPlayer.id, cardIndex);
+    } else {
+      // Skip trump exchange
+      this.exchangeTrump(gameId, botPlayer.id, -1);
+    }
+  }
+
+  private async handleBotPlayCard(gameId: string, botPlayer: Player): Promise<void> {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    const cardIndex = await this.botManager.makeBotDecision(game, botPlayer, 'play');
+    if (cardIndex >= 0) {
+      this.playCard(gameId, botPlayer.id, cardIndex);
+    }
+  }
+
+  // Check if current player is a bot and trigger bot turn
+  checkAndTriggerBotTurn(gameId: string): void {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    if (currentPlayer?.isBot) {
+      // Trigger bot turn asynchronously
+      this.handleBotTurn(gameId);
     }
   }
 }

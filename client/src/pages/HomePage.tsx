@@ -73,7 +73,7 @@ const HomePage: React.FC<{
     <div className="home-page">
       <div className="home-container">
         <h1 className="game-title">🎮 Muushig</h1>
-        <p className="game-subtitle">Traditional Mongolian Card Game</p>
+        <p className="game-subtitle">Traditional Mongolian Card Game (5 Players)</p>
         
         <div className="input-section">
           <input

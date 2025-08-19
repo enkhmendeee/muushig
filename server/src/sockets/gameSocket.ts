@@ -16,19 +16,21 @@ export class GameSocketHandler {
     // Handle game creation
     socket.on('create_game', (data: { hostName: string; maxPlayers?: number }) => {
       console.log('Creating game with data:', data);
-      const gameId = this.gameManager.createGame(data.hostName, data.maxPlayers || 5);
+      const gameId = this.gameManager.createGame(data.hostName, 5); // Always 5 players
       console.log('Created game with ID:', gameId);
       const game = this.gameManager.getGame(gameId);
       
       if (game) {
         console.log('Game found after creation, setting up player socket');
-        const player = game.players[0]; // Host is the first player
-        this.playerSockets.set(socket.id, { socket, gameId, playerId: player.id });
-        
-        socket.join(gameId);
-        socket.emit('game_created', { gameId, player });
-        socket.emit('game_state', this.sanitizeGameState(game, player.id));
-        console.log('Game creation completed successfully');
+        const player = game.players.find(p => !p.isBot); // Find the real player (host)
+        if (player) {
+          this.playerSockets.set(socket.id, { socket, gameId, playerId: player.id });
+          
+          socket.join(gameId);
+          socket.emit('game_created', { gameId, player });
+          socket.emit('game_state', this.sanitizeGameState(game, player.id));
+          console.log('Game creation completed successfully');
+        }
       } else {
         console.log('ERROR: Game not found after creation!');
       }
@@ -42,15 +44,21 @@ export class GameSocketHandler {
       if (player) {
         console.log(`Player joined successfully:`, player.name);
         const game = this.gameManager.getGame(data.gameId);
+
         if (game) {
+          socket.join(data.gameId);
+          socket.emit('game_joined', { gameId: data.gameId, player });          
+          // Add socket to playerSockets Map AFTER joining the room
           this.playerSockets.set(socket.id, { socket, gameId: data.gameId, playerId: player.id });
           
-          socket.join(data.gameId);
-          socket.emit('game_joined', { gameId: data.gameId, player });
-          socket.emit('game_state', this.sanitizeGameState(game, player.id));
-          
-          // Broadcast updated game state to all players
+          // Broadcast updated game state to all players (including the new player)
           this.broadcastGameState(data.gameId);
+          
+          // Trigger bot turn if current player is a bot
+          this.gameManager.checkAndTriggerBotTurn(data.gameId);
+        }
+        else {
+          console.log('Game not found');
         }
       } else {
         console.log(`Failed to join game: ${data.gameId}`);
@@ -85,6 +93,9 @@ export class GameSocketHandler {
           
           // Send updated game state to all players
           this.broadcastGameState(data.gameId);
+          
+          // Trigger bot turn if current player is a bot
+          this.gameManager.checkAndTriggerBotTurn(data.gameId);
         }
       }
     });
@@ -140,6 +151,8 @@ export class GameSocketHandler {
           if (game.gamePhase === 'exchanging') {
             socket.to(data.gameId).emit('phase_exchanging');
             socket.emit('phase_exchanging');
+            // Trigger bot turn if next player is a bot
+            this.gameManager.checkAndTriggerBotTurn(data.gameId);
           }
         }
       } else {
@@ -167,6 +180,8 @@ export class GameSocketHandler {
           if (game.gamePhase === 'exchanging') {
             socket.to(data.gameId).emit('phase_exchanging');
             socket.emit('phase_exchanging');
+            // Trigger bot turn if next player is a bot
+            this.gameManager.checkAndTriggerBotTurn(data.gameId);
           }
         }
       } else {
@@ -440,7 +455,8 @@ export class GameSocketHandler {
         isDealer: player.isDealer,
         isMouth: player.isMouth,
         enteredRound: player.enteredRound,
-        hasExchanged: player.hasExchanged
+        hasExchanged: player.hasExchanged,
+        isBot: player.isBot
       })),
       currentPlayerIndex: game.currentPlayerIndex,
       deck: game.deck,

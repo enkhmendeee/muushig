@@ -281,6 +281,15 @@ body {
   text-transform: capitalize;
 }
 
+.bot-info {
+  background: #3498db;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
 .leave-btn-new {
   background: #e74c3c;
   color: white;
@@ -533,7 +542,7 @@ body {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-.crown, .dealer-icon, .mouth-icon {
+.crown, .dealer-icon, .mouth-icon, .bot-icon {
   position: absolute;
   top: -10px;
   right: -10px;
@@ -545,6 +554,10 @@ body {
   justify-content: center;
   align-items: center;
   font-size: 0.8rem;
+}
+
+.bot-icon {
+  background: rgba(52, 152, 219, 0.9);
 }
 
 /* Player Info */
@@ -700,7 +713,7 @@ body {
   z-index: 20;
 }
 
-.ready-btn-new, .start-btn-new, .enter-btn-new, .skip-btn-new {
+.ready-btn-new, .start-btn-new, .enter-btn-new, .skip-btn-new, .unready-btn-new {
   padding: 0.75rem 1.5rem;
   border: none;
   border-radius: 25px;
@@ -730,7 +743,12 @@ body {
   color: white;
 }
 
-.ready-btn-new:hover, .start-btn-new:hover, .enter-btn-new:hover, .skip-btn-new:hover {
+.unready-btn-new {
+  background: #e74c3c;
+  color: white;
+}
+
+.ready-btn-new:hover, .start-btn-new:hover, .enter-btn-new:hover, .skip-btn-new:hover, .unready-btn-new:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
 }

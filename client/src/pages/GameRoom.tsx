@@ -15,6 +15,9 @@ const GameRoom: React.FC<{
   const [selectedCardsForExchange, setSelectedCardsForExchange] = useState<number[]>([]);
   const [showExchangeModal, setShowExchangeModal] = useState(false);
   const actualPlayerIndex = gameState.players.findIndex(player => player.id === currentPlayer.id);
+  
+  // Update currentPlayer with latest data from gameState
+  const updatedCurrentPlayer = gameState.players.find(player => player.id === currentPlayer.id) || currentPlayer;
 
   useEffect(() => {
     if (socket && gameState.gamePhase === 'playing') {
@@ -39,6 +42,11 @@ const GameRoom: React.FC<{
   const handleReady = () => {
     if (!socket) return;
     socket.emit('ready_check', { gameId: gameState.id, isReady: true });
+  };
+
+  const handleUnready = () => {
+    if (!socket) return;
+    socket.emit('ready_check', { gameId: gameState.id, isReady: false });
   };
 
   const handleStartGame = () => {
@@ -100,10 +108,9 @@ const GameRoom: React.FC<{
     }
   };
 
-  const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === currentPlayer.id;
-  const canStartGame = currentPlayer.isHost && gameState.gamePhase === 'ready';
-  const canMakeDecision = gameState.gamePhase === 'dealing' && currentPlayer.enteredRound === undefined;
-  const canExchange = gameState.gamePhase === 'exchanging' && currentPlayer.hasEntered && !currentPlayer.hasExchanged;
+  const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
+  const canMakeDecision = gameState.gamePhase === 'dealing' && updatedCurrentPlayer.enteredRound === undefined;
+  const canExchange = gameState.gamePhase === 'exchanging' && updatedCurrentPlayer.enteredRound === true && !updatedCurrentPlayer.hasExchanged;
 
   // Calculate player positions around the table
   const getPlayerPosition = (index: number, totalPlayers: number, actualPlayerIndex: number) => {
@@ -114,7 +121,7 @@ const GameRoom: React.FC<{
     }
     
     // Position current player at bottom (270 degrees), others relative to that
-    const angle = (relativeIndex * 360) / totalPlayers + 270; // Start from bottom
+    const angle = (relativeIndex * 360) / totalPlayers + 90; // Start from bottom
     
     // Adjust radius based on number of players to prevent overlapping
     const baseRadius = 250;
@@ -132,6 +139,7 @@ const GameRoom: React.FC<{
       <div className="game-header-new">
         <div className="room-info">
           <span className="phase-badge-new">{gameState.gamePhase.replace('_', ' ')}</span>
+          <span className="bot-info">🤖 {gameState.players.filter(p => p.isBot).length} Bots</span>
         </div>
         <div className="room-id-center">
           <button 
@@ -216,7 +224,7 @@ const GameRoom: React.FC<{
           {/* Players Around the Table */}
           {gameState.players.map((player, index) => {
             const position = getPlayerPosition(index, gameState.players.length, actualPlayerIndex);
-            const isCurrentPlayer = player.id === currentPlayer.id;
+            const isCurrentPlayer = player.id === updatedCurrentPlayer.id;
             const isActiveTurn = gameState.currentPlayerIndex === index;
             
             return (
@@ -232,6 +240,7 @@ const GameRoom: React.FC<{
                   {player.isHost && <span className="crown">👑</span>}
                   {player.isDealer && <span className="dealer-icon">🎯</span>}
                   {player.isMouth && <span className="mouth-icon">👄</span>}
+                  {player.isBot && <span className="bot-icon">🤖</span>}
                   <div className="avatar-icon">
                     {player.name.charAt(0).toUpperCase()}
                   </div>
@@ -279,7 +288,7 @@ const GameRoom: React.FC<{
                     // Show card backs for other players
                     <div className="opponent-cards">
                       {Array.isArray(player.hand) ? player.hand.map((_, cardIndex) => (
-                        <div key={cardIndex} className="card card-back"></div>
+                        <div key={`${player.id}-card-back-${cardIndex}`} className="card card-back"></div>
                       )) : (
                         <div className="card-count">{player.hand} cards</div>
                       )}
@@ -301,11 +310,16 @@ const GameRoom: React.FC<{
 
       {/* Game Controls */}
       <div className="game-controls-new">
-        {gameState.gamePhase === 'waiting' && !currentPlayer.isReady && (
+        
+        {gameState.gamePhase === 'waiting' && !updatedCurrentPlayer.isReady && (
           <button onClick={handleReady} className="ready-btn-new">Ready</button>
         )}
+
+        {(gameState.gamePhase === 'waiting' || gameState.gamePhase === 'playing') && updatedCurrentPlayer.isReady && (
+          <button onClick={handleUnready} className="unready-btn-new">Unready</button>
+        )}
         
-        {canStartGame && (
+        {updatedCurrentPlayer.isHost && gameState.gamePhase === 'ready' && (
           <button onClick={handleStartGame} className="start-btn-new">Start Game</button>
         )}
         
@@ -339,9 +353,9 @@ const GameRoom: React.FC<{
             <h3>Exchange Cards</h3>
             <p>Select cards to exchange with the tree. You can exchange up to {gameState.tree.length} cards.</p>
             <div className="exchange-cards-preview">
-              {Array.isArray(currentPlayer.hand) && currentPlayer.hand.map((card, index) => (
+              {Array.isArray(updatedCurrentPlayer.hand) && updatedCurrentPlayer.hand.map((card, index) => (
                 <button
-                  key={index}
+                  key={`${card.suit}-${card.rank}-${index}`}
                   className={`card exchange-card ${selectedCardsForExchange.includes(index) ? 'selected' : ''}`}
                   onClick={() => handleCardSelectForExchange(index)}
                 >

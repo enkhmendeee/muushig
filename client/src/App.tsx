@@ -38,6 +38,7 @@ function App() {
 
     newSocket.on('game_state', (state: GameState) => {
       setGameState(state);
+      console.log('Game state received:', state);
     });
 
     newSocket.on('chat_message', (message: ChatMessage) => {

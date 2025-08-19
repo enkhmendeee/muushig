@@ -5,12 +5,12 @@ export interface Player {
   score: number;
   isHost: boolean;
   isReady: boolean;
-  hasEntered: boolean;
   housesBuilt: number;
   isDealer: boolean;
   isMouth: boolean;
   enteredRound: boolean | undefined;
   hasExchanged: boolean;
+  isBot: boolean; // New field to identify bot players
 }
 
 export interface Card {

@@ -10,6 +10,7 @@ export interface Player {
   isDealer: boolean;
   isMouth: boolean;
   enteredRound: boolean | undefined;
+  isBot: boolean; // New field to identify bot players
 }
 
 export interface Card {
@@ -61,7 +62,7 @@ export interface ChatMessage {
 }
 
 export interface GameEvent {
-  type: 'game_created' | 'player_joined' | 'game_ready' |'player_unready' |'player_ready' | 'player_left' | 'dealt_cards' | 'card_played' | 'trump_exchanging' | 'trump_exchanged' | 'turn_changed' | 'game_started' | 'game_ended' | 'house_completed' | 'player_entered' | 'player_declined' | 'cards_exchanged';
+  type: 'game_created' | 'player_joined' | 'game_ready' |'player_unready' |'player_ready' | 'player_left' | 'dealt_cards' | 'card_played' | 'trump_exchanging' | 'trump_exchanged' | 'turn_changed' | 'game_started' | 'game_ended' | 'house_completed' | 'player_entered' | 'player_declined' | 'cards_exchanged' | 'bot_joined' | 'bot_left' | 'bot_action';
   data: any;
   timestamp: Date;
 }
