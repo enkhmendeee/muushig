@@ -14,7 +14,9 @@ const GameRoom: React.FC<{
   const [showChat, setShowChat] = useState(false);
   const [selectedCardsForExchange, setSelectedCardsForExchange] = useState<number[]>([]);
   const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const [botActionMessage, setBotActionMessage] = useState<string>('');
   const actualPlayerIndex = gameState.players.findIndex(player => player.id === currentPlayer.id);
+  const prevPlayersRef = React.useRef(gameState.players);
   
   // Update currentPlayer with latest data from gameState
   const updatedCurrentPlayer = gameState.players.find(player => player.id === currentPlayer.id) || currentPlayer;
@@ -38,6 +40,52 @@ const GameRoom: React.FC<{
       socket.off('playable_cards');
     };
   }, [socket, gameState.id]);
+
+  // Track bot decisions and show notifications
+  useEffect(() => {
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    if (currentPlayer?.isBot) {
+      // Clear any existing bot action message when a new bot starts thinking
+      setBotActionMessage('');
+    }
+  }, [gameState.currentPlayerIndex, gameState.players]);
+
+  // Track when bots make decisions
+  useEffect(() => {
+    const prevPlayers = prevPlayersRef.current;
+    const currentPlayers = gameState.players;
+    
+    currentPlayers.forEach((player, index) => {
+      const prevPlayer = prevPlayers[index];
+      if (player.isBot && 
+          prevPlayer && 
+          prevPlayer.enteredRound === undefined && 
+          player.enteredRound !== undefined) {
+        const action = player.enteredRound ? 'entered' : 'declined';
+        setBotActionMessage(`${player.name} ${action} the round`);
+        
+        // Clear the message after 3 seconds
+        setTimeout(() => {
+          setBotActionMessage('');
+        }, 3000);
+      }
+      
+      // Track exchange decisions
+      if (player.isBot && 
+          prevPlayer && 
+          !prevPlayer.hasExchanged && 
+          player.hasExchanged) {
+        setBotActionMessage(`${player.name} exchanged cards`);
+        
+        // Clear the message after 3 seconds
+        setTimeout(() => {
+          setBotActionMessage('');
+        }, 3000);
+      }
+    });
+    
+    prevPlayersRef.current = currentPlayers;
+  }, [gameState.players]);
 
   const handleReady = () => {
     if (!socket) return;
@@ -109,8 +157,8 @@ const GameRoom: React.FC<{
   };
 
   const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
-  const canMakeDecision = gameState.gamePhase === 'dealing' && updatedCurrentPlayer.enteredRound === undefined;
-  const canExchange = gameState.gamePhase === 'exchanging' && updatedCurrentPlayer.enteredRound === true && !updatedCurrentPlayer.hasExchanged;
+  const canMakeDecision = gameState.gamePhase === 'dealing' && updatedCurrentPlayer.enteredRound === undefined && isMyTurn;
+  const canExchange = gameState.gamePhase === 'exchanging' && updatedCurrentPlayer.enteredRound === true && !updatedCurrentPlayer.hasExchanged && isMyTurn;
 
   // Calculate player positions around the table
   const getPlayerPosition = (index: number, totalPlayers: number, actualPlayerIndex: number) => {
@@ -216,7 +264,23 @@ const GameRoom: React.FC<{
             {/* Game Status Message */}
             {gameState.gamePhase === 'dealing' && (
               <div className="game-status">
-                {gameState.players.find(p => p.enteredRound === undefined)?.name || 'Someone'} is deciding to enter...
+                {gameState.players[gameState.currentPlayerIndex]?.isBot ? '🤖 ' : ''}
+                {gameState.players[gameState.currentPlayerIndex]?.name} is deciding to enter...
+                {gameState.players[gameState.currentPlayerIndex]?.isBot && ' (thinking...)'}
+              </div>
+            )}
+            {gameState.gamePhase === 'exchanging' && (
+              <div className="game-status">
+                {gameState.players[gameState.currentPlayerIndex]?.isBot ? '🤖 ' : ''}
+                {gameState.players[gameState.currentPlayerIndex]?.name} is exchanging cards...
+                {gameState.players[gameState.currentPlayerIndex]?.isBot && ' (thinking...)'}
+              </div>
+            )}
+            
+            {/* Bot Action Notification */}
+            {botActionMessage && (
+              <div className="bot-action-notification">
+                {botActionMessage}
               </div>
             )}
           </div>
@@ -301,6 +365,7 @@ const GameRoom: React.FC<{
                   {player.isReady && <span className="ready-badge-new">Ready</span>}
                   {player.enteredRound === true && <span className="entered-badge-new">Entered</span>}
                   {player.enteredRound === false && <span className="declined-badge-new">Declined</span>}
+                  {player.hasExchanged && <span className="exchanged-badge-new">Exchanged</span>}
                 </div>
               </div>
             );

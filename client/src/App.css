@@ -489,6 +489,22 @@ body {
   animation: fadeInOut 2s ease-in-out infinite;
 }
 
+.bot-action-notification {
+  background: rgba(52, 152, 219, 0.9);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  text-align: center;
+  margin-top: 0.5rem;
+  animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+  0% { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
 @keyframes fadeInOut {
   0%, 100% { opacity: 0.7; }
   50% { opacity: 1; }
@@ -699,6 +715,11 @@ body {
 
 .declined-badge-new {
   background: #e74c3c;
+  color: white;
+}
+
+.exchanged-badge-new {
+  background: #9b59b6;
   color: white;
 }
 

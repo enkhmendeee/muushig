@@ -211,7 +211,7 @@ export class GameManager {
     game.tree = remainingDeck; // All remaining cards go to tree
     game.trumpCard = trumpCard;
     game.gamePhase = 'dealing';
-    game.currentPlayerIndex = 0;
+    game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length; // Start with mouth player
     game.lastActivity = new Date();
     game.players[(game.dealerIndex + 1) % game.players.length].isMouth = true;
     game.players[game.dealerIndex].isDealer = true;
@@ -273,7 +273,15 @@ export class GameManager {
     });
 
       if (game.players.every(p => p.enteredRound !== undefined)) {
+      // All players decided, move to exchanging phase
       game.gamePhase = 'exchanging';
+      // Start with mouth player for exchanging
+      game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length;
+      // Trigger bot turn if next player is a bot
+      this.checkAndTriggerBotTurn(gameId);
+    } else {
+      // Move to next undecided player
+      this.moveToNextUndecidedPlayer(game);
       // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
     }
@@ -311,7 +319,15 @@ export class GameManager {
     });
 
     if (game.players.every(p => p.enteredRound !== undefined)) {
+      // All players decided, move to exchanging phase
       game.gamePhase = 'exchanging';
+      // Start with mouth player for exchanging
+      game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length;
+      // Trigger bot turn if next player is a bot
+      this.checkAndTriggerBotTurn(gameId);
+    } else {
+      // Move to next undecided player
+      this.moveToNextUndecidedPlayer(game);
       // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
     }
@@ -352,6 +368,7 @@ export class GameManager {
     });
 
     if (game.players.filter(p => p.enteredRound).every(p => p.hasExchanged) || game.tree.length === 0) {
+      // All players who entered have exchanged or tree is empty
       game.gamePhase = 'trump_exchanging';
       game.events.push({
         type: 'trump_exchanging',
@@ -359,6 +376,11 @@ export class GameManager {
         timestamp: new Date()
       }); 
       // Trigger bot turn if dealer is a bot
+      this.checkAndTriggerBotTurn(gameId);
+    } else {
+      // Move to next player who entered but hasn't exchanged yet
+      this.moveToNextPlayerToExchange(game);
+      // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
     }
     return true;
@@ -711,6 +733,24 @@ export class GameManager {
     if (cardIndex >= 0) {
       this.playCard(gameId, botPlayer.id, cardIndex);
     }
+  }
+
+  // Move to next undecided player
+  private moveToNextUndecidedPlayer(game: GameState): void {
+    let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
+    while (game.players[nextIndex].enteredRound !== undefined) {
+      nextIndex = (nextIndex + 1) % game.players.length;
+    }
+    game.currentPlayerIndex = nextIndex;
+  }
+
+  // Move to next player who needs to exchange
+  private moveToNextPlayerToExchange(game: GameState): void {
+    let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
+    while (!game.players[nextIndex].enteredRound || game.players[nextIndex].hasExchanged) {
+      nextIndex = (nextIndex + 1) % game.players.length;
+    }
+    game.currentPlayerIndex = nextIndex;
   }
 
   // Check if current player is a bot and trigger bot turn
