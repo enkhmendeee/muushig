@@ -14,6 +14,7 @@ const GameRoom: React.FC<{
   const [showChat, setShowChat] = useState(false);
   const [selectedCardsForExchange, setSelectedCardsForExchange] = useState<number[]>([]);
   const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const [isTrumpExchange, setIsTrumpExchange] = useState(false);
   const [botActionMessage, setBotActionMessage] = useState<string>('');
   const actualPlayerIndex = gameState.players.findIndex(player => player.id === currentPlayer.id);
   const prevPlayersRef = React.useRef(gameState.players);
@@ -75,7 +76,8 @@ const GameRoom: React.FC<{
           prevPlayer && 
           !prevPlayer.hasExchanged && 
           player.hasExchanged) {
-        setBotActionMessage(`${player.name} exchanged cards`);
+        const action = gameState.gamePhase === 'trump_exchanging' ? 'exchanged trump card' : 'exchanged cards';
+        setBotActionMessage(`${player.name} ${action}`);
         
         // Clear the message after 3 seconds
         setTimeout(() => {
@@ -122,25 +124,65 @@ const GameRoom: React.FC<{
       if (prev.includes(cardIndex)) {
         return prev.filter(index => index !== cardIndex);
       } else {
-        return [...prev, cardIndex];
+        if (isTrumpExchange) {
+          // For trump exchange, only allow one card selection
+          return [cardIndex];
+        } else {
+          return [...prev, cardIndex];
+        }
       }
     });
   };
 
   const handleExchangeCards = () => {
     if (!socket || selectedCardsForExchange.length === 0) return;
-    socket.emit('exchange_cards', { 
-      gameId: gameState.id, 
-      cardIndices: selectedCardsForExchange 
-    });
+    
+    if (isTrumpExchange) {
+      // For trump exchange, only exchange the first selected card
+      socket.emit('exchange_trump', { 
+        gameId: gameState.id, 
+        cardIndex: selectedCardsForExchange[0] 
+      });
+    } else {
+      // For regular exchange
+      socket.emit('exchange_cards', { 
+        gameId: gameState.id, 
+        cardIndices: selectedCardsForExchange 
+      });
+    }
+    
     setSelectedCardsForExchange([]);
     setShowExchangeModal(false);
+    setIsTrumpExchange(false);
   };
 
   const handleSkipExchange = () => {
     if (!socket) return;
-    socket.emit('exchange_cards', { gameId: gameState.id, cardIndices: [] });
+    
+    if (isTrumpExchange) {
+      socket.emit('exchange_trump', { gameId: gameState.id, cardIndex: -1 });
+    } else {
+      socket.emit('exchange_cards', { gameId: gameState.id, cardIndices: [] });
+    }
+    
     setShowExchangeModal(false);
+    setIsTrumpExchange(false);
+  };
+
+  const handleExchangeTrump = (cardIndex: number) => {
+    if (!socket) return;
+    socket.emit('exchange_trump', { gameId: gameState.id, cardIndex });
+  };
+
+  const handleOpenTrumpExchange = () => {
+    setIsTrumpExchange(true);
+    setSelectedCardsForExchange([]);
+    setShowExchangeModal(true);
+  };
+
+  const handleSkipTrumpExchange = () => {
+    if (!socket) return;
+    socket.emit('exchange_trump', { gameId: gameState.id, cardIndex: -1 });
   };
 
   const handleSendChat = () => {
@@ -159,6 +201,7 @@ const GameRoom: React.FC<{
   const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
   const canMakeDecision = gameState.gamePhase === 'dealing' && updatedCurrentPlayer.enteredRound === undefined && isMyTurn;
   const canExchange = gameState.gamePhase === 'exchanging' && updatedCurrentPlayer.enteredRound === true && !updatedCurrentPlayer.hasExchanged && isMyTurn;
+  const canExchangeTrump = gameState.gamePhase === 'trump_exchanging' && updatedCurrentPlayer.enteredRound === true && updatedCurrentPlayer.isDealer && !updatedCurrentPlayer.hasExchanged && gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
 
   // Calculate player positions around the table
   const getPlayerPosition = (index: number, totalPlayers: number, actualPlayerIndex: number) => {
@@ -273,6 +316,13 @@ const GameRoom: React.FC<{
               <div className="game-status">
                 {gameState.players[gameState.currentPlayerIndex]?.isBot ? '🤖 ' : ''}
                 {gameState.players[gameState.currentPlayerIndex]?.name} is exchanging cards...
+                {gameState.players[gameState.currentPlayerIndex]?.isBot && ' (thinking...)'}
+              </div>
+            )}
+            {gameState.gamePhase === 'trump_exchanging' && (
+              <div className="game-status">
+                {gameState.players[gameState.currentPlayerIndex]?.isBot ? '🤖 ' : ''}
+                {gameState.players[gameState.currentPlayerIndex]?.name} is exchanging trump card...
                 {gameState.players[gameState.currentPlayerIndex]?.isBot && ' (thinking...)'}
               </div>
             )}
@@ -409,14 +459,46 @@ const GameRoom: React.FC<{
             </button>
           </div>
         )}
+
+        {canExchangeTrump && (
+          <div className="exchange-controls">
+            <button 
+              onClick={handleOpenTrumpExchange}
+              className="exchange-btn"
+            >
+              Exchange Trump Card
+            </button>
+            <button onClick={handleSkipTrumpExchange} className="skip-exchange-btn">
+              Skip Trump Exchange
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Exchange Modal */}
       {showExchangeModal && (
         <div className="exchange-modal-overlay">
           <div className="exchange-modal">
-            <h3>Exchange Cards</h3>
-            <p>Select cards to exchange with the tree. You can exchange up to {gameState.tree.length} cards.</p>
+            <h3>{isTrumpExchange ? 'Exchange Trump Card' : 'Exchange Cards'}</h3>
+            {isTrumpExchange && gameState.trumpCard && (
+              <div className="trump-card-display">
+                <div className="card trump-new">
+                  <span className={`card-rank ${gameState.trumpCard.suit === 'hearts' || gameState.trumpCard.suit === 'diamonds' ? 'red' : 'black'}`}>
+                    {gameState.trumpCard.rank}
+                  </span>
+                  <span className={`card-suit ${gameState.trumpCard.suit === 'hearts' || gameState.trumpCard.suit === 'diamonds' ? 'red' : 'black'}`}>
+                    {getSuitSymbol(gameState.trumpCard.suit)}
+                  </span>
+                </div>
+                <div className="trump-label">Trump Card</div>
+              </div>
+            )}
+            <p>
+              {isTrumpExchange 
+                ? `Select one card to exchange with the trump card (${gameState.trumpCard?.rank} of ${gameState.trumpCard?.suit})`
+                : `Select cards to exchange with the tree. You can exchange up to ${gameState.tree.length} cards.`
+              }
+            </p>
             <div className="exchange-cards-preview">
               {Array.isArray(updatedCurrentPlayer.hand) && updatedCurrentPlayer.hand.map((card, index) => (
                 <button
@@ -439,10 +521,13 @@ const GameRoom: React.FC<{
                 disabled={selectedCardsForExchange.length === 0}
                 className="confirm-exchange-btn"
               >
-                Exchange {selectedCardsForExchange.length} Cards
+                {isTrumpExchange 
+                  ? `Exchange ${selectedCardsForExchange.length} Card`
+                  : `Exchange ${selectedCardsForExchange.length} Cards`
+                }
               </button>
               <button onClick={handleSkipExchange} className="skip-exchange-btn">
-                Skip Exchange
+                {isTrumpExchange ? 'Skip Trump Exchange' : 'Skip Exchange'}
               </button>
             </div>
           </div>

@@ -8,6 +8,10 @@ export class GameSocketHandler {
 
   constructor(gameManager: GameManager) {
     this.gameManager = gameManager;
+    // Set the broadcast callback so GameManager can notify when state changes
+    this.gameManager.setBroadcastCallback((gameId: string) => {
+      this.broadcastGameState(gameId);
+    });
   }
 
   handleConnection(socket: Socket): void {
@@ -141,9 +145,6 @@ export class GameSocketHandler {
       if (success) {
         const game = this.gameManager.getGame(data.gameId);
         if (game) {
-          // Broadcast updated game state
-          this.broadcastGameState(data.gameId);
-          
           // Notify other players
           socket.to(data.gameId).emit('player_entered', { playerId: playerSocket.playerId });
           
@@ -151,9 +152,8 @@ export class GameSocketHandler {
           if (game.gamePhase === 'exchanging') {
             socket.to(data.gameId).emit('phase_exchanging');
             socket.emit('phase_exchanging');
-            // Trigger bot turn if next player is a bot
-            this.gameManager.checkAndTriggerBotTurn(data.gameId);
           }
+          this.gameManager.checkAndTriggerBotTurn(data.gameId);
         }
       } else {
         socket.emit('enter_error', { message: 'Cannot enter turn' });
@@ -170,9 +170,6 @@ export class GameSocketHandler {
       if (success) {
         const game = this.gameManager.getGame(data.gameId);
         if (game) {
-          // Broadcast updated game state
-          this.broadcastGameState(data.gameId);
-          
           // Notify other players
           socket.to(data.gameId).emit('player_declined', { playerId: playerSocket.playerId });
           
@@ -181,9 +178,8 @@ export class GameSocketHandler {
             socket.to(data.gameId).emit('phase_exchanging');
             socket.emit('phase_exchanging');
             game.currentPlayerIndex = game.dealerIndex + 1;
-            // Trigger bot turn if next player is a bot
-            this.gameManager.checkAndTriggerBotTurn(data.gameId);
           }
+          this.gameManager.checkAndTriggerBotTurn(data.gameId);
         }
       } else {
         socket.emit('skip_error', { message: 'Cannot skip turn' });
@@ -200,9 +196,6 @@ export class GameSocketHandler {
       if (success) {
         const game = this.gameManager.getGame(data.gameId);
         if (game) {
-          // Broadcast updated game state
-          this.broadcastGameState(data.gameId);
-          
           // Notify other players
           socket.to(data.gameId).emit('cards_exchanged', { 
             playerId: playerSocket.playerId, 
@@ -234,9 +227,6 @@ export class GameSocketHandler {
       if (success) {
         const game = this.gameManager.getGame(data.gameId);
         if (game) {
-          // Broadcast updated game state
-          this.broadcastGameState(data.gameId);
-          
           // Notify other players
           socket.to(data.gameId).emit('trump_exchanged', { 
             playerId: playerSocket.playerId, 
@@ -262,9 +252,6 @@ export class GameSocketHandler {
       if (success) {
         const game = this.gameManager.getGame(data.gameId);
         if (game) {
-          // Broadcast updated game state
-          this.broadcastGameState(data.gameId);
-          
           // Notify other players about the card played
           socket.to(data.gameId).emit('card_played', { 
             playerId: playerSocket.playerId, 

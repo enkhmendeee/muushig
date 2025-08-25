@@ -6,6 +6,11 @@ import { v4 as uuidv4 } from 'uuid';
 export class GameManager {
   private readonly games: Map<string, GameState> = new Map();
   private readonly botManager: BotManager = new BotManager();
+  private broadcastCallback?: (gameId: string) => void;
+
+  setBroadcastCallback(callback: (gameId: string) => void): void {
+    this.broadcastCallback = callback;
+  }
 
   createGame(hostName: string, maxPlayers: number = 5): string {
     const gameId = uuidv4();
@@ -230,16 +235,20 @@ export class GameManager {
 
     if (game.players.every(p => p.enteredRound !== undefined)) {
       // All players decided, move to exchanging phase
+      console.log(`All players decided, moving to exchanging phase`);
+      console.log(`Current player index: ${game.currentPlayerIndex}`);
       game.gamePhase = 'exchanging';
       // Start with mouth player for exchanging
       game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length;
-      // Trigger bot turn if next player is a bot
-      this.checkAndTriggerBotTurn(gameId);
+      // Broadcast state change
+      this.broadcastCallback?.(gameId);
     } else {
       // Move to next undecided player
+      console.log(`Moving to next undecided player`);
+      console.log(`Current player index: ${game.currentPlayerIndex}`);
       this.nextTurnEnter(game);
-      // Trigger bot turn if next player is a bot
-      this.checkAndTriggerBotTurn(gameId);
+      // Broadcast state change
+      this.broadcastCallback?.(gameId);
     }
     return true;
   }
@@ -264,20 +273,19 @@ export class GameManager {
 
     player.enteredRound = false;
     game.lastActivity = new Date();
-    this.nextTurn(game);
 
     if (game.players.every(p => p.enteredRound !== undefined)) {
       // All players decided, move to exchanging phase
       game.gamePhase = 'exchanging';
       // Start with mouth player for exchanging
       game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length;
-      // Trigger bot turn if next player is a bot
-      this.checkAndTriggerBotTurn(gameId);
+      // Broadcast state change
+      this.broadcastCallback?.(gameId);
     } else {
       // Move to next undecided player
       this.nextTurnEnter(game);
-      // Trigger bot turn if next player is a bot
-      this.checkAndTriggerBotTurn(gameId);
+      // Broadcast state change
+      this.broadcastCallback?.(gameId);
     }
 
     return true;
@@ -314,9 +322,15 @@ export class GameManager {
     if (game.players.filter(p => p.enteredRound).every(p => p.hasExchanged) || game.tree.length === 0) {
       // All players who entered have exchanged or tree is empty
       game.gamePhase = 'trump_exchanging';
+      // Set current player to dealer for trump exchange
+      game.currentPlayerIndex = game.dealerIndex;
+      // Broadcast state change
+      this.broadcastCallback?.(gameId);
       // Trigger bot turn if dealer is a bot
       this.checkAndTriggerBotTurn(gameId);
     } else {
+      // Broadcast state change
+      this.broadcastCallback?.(gameId);
       // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
     }
@@ -334,6 +348,18 @@ export class GameManager {
       return false;
     }
 
+    // Handle skip trump exchange (cardIndex = -1)
+    if (cardIndex === -1) {
+      player.hasExchanged = true;
+      game.lastActivity = new Date();
+      
+      game.gamePhase = 'playing';
+      this.nextTurn(game);
+      // Broadcast state change
+      this.broadcastCallback?.(gameId);
+      return true;
+    }
+
     if (cardIndex < 0 || cardIndex >= player.hand.length) {
       return false;
     }
@@ -346,6 +372,8 @@ export class GameManager {
     
     game.gamePhase = 'playing';
     this.nextTurn(game);
+    // Broadcast state change
+    this.broadcastCallback?.(gameId);
 
     return true;
   }
@@ -409,6 +437,8 @@ export class GameManager {
     } else {
       // Move to next player
       this.nextTurn(game);
+      // Broadcast state change
+      this.broadcastCallback?.(gameId);
       // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
     }
@@ -484,6 +514,10 @@ export class GameManager {
   private nextTurnEnter(game: GameState): void {
     let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
     game.currentPlayerIndex = nextIndex;
+    this.broadcastCallback?.(game.id);
+    if (game.players[nextIndex]?.isBot) {
+      this.checkAndTriggerBotTurn(game.id);
+    }
   }
 
   sendChatMessage(gameId: string, playerId: string, message: string): ChatMessage | null {
@@ -605,7 +639,7 @@ export class GameManager {
     const currentPlayer = game.players[game.currentPlayerIndex];
     if (!currentPlayer.isBot) return;
 
-    console.log(`Bot ${currentPlayer.name} is thinking...`);
+    console.log(`Bot ${currentPlayer.name} is thinking... ${game.gamePhase}`);
 
     switch (game.gamePhase) {
       case 'dealing':
@@ -628,7 +662,7 @@ export class GameManager {
     if (!game) return;
 
     const decision = await this.botManager.makeBotDecision(game, botPlayer, 'enter');
-    
+    console.log(`Bot ${botPlayer.name} decision: ${decision}`);
     if (decision) {
       this.enterTurn(gameId, botPlayer.id);
     } else {
@@ -671,8 +705,9 @@ export class GameManager {
     const game = this.games.get(gameId);
     if (!game) return;
 
-    const currentPlayer = game.players[game.currentPlayerIndex];
-    if (currentPlayer?.isBot) {
+    if (game.players[game.currentPlayerIndex]?.isBot) {
+      // Broadcast state change before bot starts thinking
+      this.broadcastCallback?.(gameId);
       // Trigger bot turn asynchronously
       this.handleBotTurn(gameId);
     }

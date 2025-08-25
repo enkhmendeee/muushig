@@ -816,6 +816,8 @@ body {
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
 }
 
+
+
 /* Exchange Modal */
 .exchange-modal-overlay {
   position: fixed;
@@ -864,6 +866,14 @@ body {
   margin: 0 0 1.5rem 0;
   text-align: center;
   font-size: 0.9rem;
+}
+
+.trump-card-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .exchange-cards-preview {
