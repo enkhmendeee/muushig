@@ -47,7 +47,6 @@ export interface GameState {
   leadSuit: Card['suit'] | null; // suit of first card in current house
   createdAt: Date;
   lastActivity: Date;
-  events: GameEvent[];
   chatMessages: ChatMessage[];
   dealerIndex: number;
 }
@@ -59,10 +58,4 @@ export interface ChatMessage {
   message: string;
   timestamp: Date;
   type: 'chat' | 'system' | 'game';
-}
-
-export interface GameEvent {
-  type: 'game_created' | 'player_joined' | 'game_ready' |'player_unready' |'player_ready' | 'player_left' | 'dealt_cards' | 'card_played' | 'trump_exchanging' | 'trump_exchanged' | 'turn_changed' | 'game_started' | 'game_ended' | 'house_completed' | 'player_entered' | 'player_declined' | 'cards_exchanged' | 'bot_joined' | 'bot_left' | 'bot_action';
-  data: any;
-  timestamp: Date;
 }

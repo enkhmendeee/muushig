@@ -1,4 +1,4 @@
-import { Player, GameState, Card } from '../types/game';
+import { Player, GameState} from '../types/game';
 import { findPlayableCards } from '../utils/deck';
 import { v4 as uuidv4 } from 'uuid';
 

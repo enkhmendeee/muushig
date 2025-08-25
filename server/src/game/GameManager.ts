@@ -39,7 +39,6 @@ export class GameManager {
       leadSuit: null,
       createdAt: new Date(),
       lastActivity: new Date(),
-      events: [],
       chatMessages: [],
       dealerIndex: 0
     };
@@ -93,18 +92,6 @@ export class GameManager {
     const botIndex = game.players.findIndex(p => p.id === botToReplace.id);
     if (botIndex !== -1) {
       game.players[botIndex] = player;
-      
-      game.events.push({
-        type: 'bot_left',
-        data: { botName: botToReplace.name, gameId: game.id },
-        timestamp: new Date()
-      });
-
-      game.events.push({
-        type: 'player_joined',
-        data: { playerName, gameId: game.id },
-        timestamp: new Date()
-      });
 
       game.lastActivity = new Date();
       
@@ -131,30 +118,15 @@ export class GameManager {
     if (isReady) {
       player.isReady = true;
       game.lastActivity = new Date();
-      game.events.push({
-        type: 'player_ready',
-        data: { playerId, gameId: game.id },
-        timestamp: new Date()
-      });
     } else {
       player.isReady = false;
       game.lastActivity = new Date();
-      game.events.push({
-        type: 'player_unready',
-        data: { playerId, gameId: game.id },
-        timestamp: new Date()
-      });
     }
 
     // Check if all players are ready
     const allReady = game.players.every(p => p.isReady === true);
     if (allReady) {
       game.gamePhase = 'ready';
-      game.events.push({
-        type: 'game_ready',
-        data: { gameId: game.id },
-        timestamp: new Date()
-      });
     }
     return true;
   }
@@ -170,11 +142,6 @@ export class GameManager {
     const playerName = player.name;
     game.players = game.players.filter(p => p.id !== playerId);
     game.lastActivity = new Date();
-    game.events.push({
-      type: 'player_left',
-      data: { playerId, playerName, gameId: game.id },
-      timestamp: new Date()
-    });
     
     // Send system message
     this.sendSystemMessage(gameId, `${playerName} left the game`);
@@ -215,12 +182,6 @@ export class GameManager {
     game.lastActivity = new Date();
     game.players[(game.dealerIndex + 1) % game.players.length].isMouth = true;
     game.players[game.dealerIndex].isDealer = true;
-    
-    game.events.push({
-      type: 'dealt_cards',
-      data: { gameId: game.id, trumpCard },
-      timestamp: new Date()
-    });
     
     // Send system message
     this.sendSystemMessage(gameId, `Game started! Trump card is ${trumpCard?.rank} of ${trumpCard?.suit}`);
@@ -266,13 +227,8 @@ export class GameManager {
 
     player.enteredRound = true;
     game.lastActivity = new Date();
-    game.events.push({
-      type: 'player_entered',
-      data: { playerId, gameId: game.id },
-      timestamp: new Date()
-    });
 
-      if (game.players.every(p => p.enteredRound !== undefined)) {
+    if (game.players.every(p => p.enteredRound !== undefined)) {
       // All players decided, move to exchanging phase
       game.gamePhase = 'exchanging';
       // Start with mouth player for exchanging
@@ -281,7 +237,7 @@ export class GameManager {
       this.checkAndTriggerBotTurn(gameId);
     } else {
       // Move to next undecided player
-      this.moveToNextUndecidedPlayer(game);
+      this.nextTurnEnter(game);
       // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
     }
@@ -302,21 +258,13 @@ export class GameManager {
     if (!this.canPlayerDecide(game, playerId)) {
       player.enteredRound = true;
       game.lastActivity = new Date();
-      game.events.push({
-        type: 'player_entered',
-        data: { playerId, gameId: game.id },
-        timestamp: new Date()
-      });
+      this.nextTurn(game);
       return false; // Player cannot decline due to auto-entry rules
     }
 
     player.enteredRound = false;
     game.lastActivity = new Date();
-    game.events.push({
-      type: 'player_declined',
-      data: { playerId, gameId: game.id },
-      timestamp: new Date()
-    });
+    this.nextTurn(game);
 
     if (game.players.every(p => p.enteredRound !== undefined)) {
       // All players decided, move to exchanging phase
@@ -327,7 +275,7 @@ export class GameManager {
       this.checkAndTriggerBotTurn(gameId);
     } else {
       // Move to next undecided player
-      this.moveToNextUndecidedPlayer(game);
+      this.nextTurnEnter(game);
       // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
     }
@@ -361,25 +309,14 @@ export class GameManager {
     player.hand.push(...newCards);
     player.hasExchanged = true;
     game.lastActivity = new Date();
-    game.events.push({
-      type: 'cards_exchanged',
-      data: { playerId, gameId: game.id, cardCount: cardIndices.length },
-      timestamp: new Date()
-    });
+    this.nextTurn(game);
 
     if (game.players.filter(p => p.enteredRound).every(p => p.hasExchanged) || game.tree.length === 0) {
       // All players who entered have exchanged or tree is empty
       game.gamePhase = 'trump_exchanging';
-      game.events.push({
-        type: 'trump_exchanging',
-        data: { gameId: game.id },
-        timestamp: new Date()
-      }); 
       // Trigger bot turn if dealer is a bot
       this.checkAndTriggerBotTurn(gameId);
     } else {
-      // Move to next player who entered but hasn't exchanged yet
-      this.moveToNextPlayerToExchange(game);
       // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
     }
@@ -407,18 +344,8 @@ export class GameManager {
     player.hasExchanged = true;
     game.lastActivity = new Date();
     
-    game.events.push({
-      type: 'trump_exchanged',
-      data: { playerId, gameId: game.id, cardIndex },
-      timestamp: new Date()
-    });
-
     game.gamePhase = 'playing';
-    game.events.push({
-      type: 'game_started',
-      data: { gameId: game.id },
-      timestamp: new Date()
-    });
+    this.nextTurn(game);
 
     return true;
   }
@@ -551,6 +478,11 @@ export class GameManager {
       while (!game.players[nextIndex].enteredRound) {
       nextIndex = (nextIndex + 1) % game.players.length;
     }
+    game.currentPlayerIndex = nextIndex;
+  }
+
+  private nextTurnEnter(game: GameState): void {
+    let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
     game.currentPlayerIndex = nextIndex;
   }
 
@@ -734,25 +666,6 @@ export class GameManager {
       this.playCard(gameId, botPlayer.id, cardIndex);
     }
   }
-
-  // Move to next undecided player
-  private moveToNextUndecidedPlayer(game: GameState): void {
-    let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
-    while (game.players[nextIndex].enteredRound !== undefined) {
-      nextIndex = (nextIndex + 1) % game.players.length;
-    }
-    game.currentPlayerIndex = nextIndex;
-  }
-
-  // Move to next player who needs to exchange
-  private moveToNextPlayerToExchange(game: GameState): void {
-    let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
-    while (!game.players[nextIndex].enteredRound || game.players[nextIndex].hasExchanged) {
-      nextIndex = (nextIndex + 1) % game.players.length;
-    }
-    game.currentPlayerIndex = nextIndex;
-  }
-
   // Check if current player is a bot and trigger bot turn
   checkAndTriggerBotTurn(gameId: string): void {
     const game = this.games.get(gameId);

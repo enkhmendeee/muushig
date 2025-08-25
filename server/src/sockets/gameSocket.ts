@@ -180,6 +180,7 @@ export class GameSocketHandler {
           if (game.gamePhase === 'exchanging') {
             socket.to(data.gameId).emit('phase_exchanging');
             socket.emit('phase_exchanging');
+            game.currentPlayerIndex = game.dealerIndex + 1;
             // Trigger bot turn if next player is a bot
             this.gameManager.checkAndTriggerBotTurn(data.gameId);
           }
@@ -212,6 +213,7 @@ export class GameSocketHandler {
           if (game.gamePhase === 'trump_exchanging') {
             socket.to(data.gameId).emit('phase_trump_exchanging');
             socket.emit('phase_trump_exchanging');
+            game.currentPlayerIndex = game.dealerIndex;
           } else if (game.gamePhase === 'playing') {
             socket.to(data.gameId).emit('game_started');
             socket.emit('game_started');
@@ -471,11 +473,6 @@ export class GameSocketHandler {
       dealerIndex: game.dealerIndex,
       createdAt: game.createdAt.toISOString(),
       lastActivity: game.lastActivity.toISOString(),
-      events: game.events.map(event => ({
-        type: event.type,
-        data: event.data,
-        timestamp: event.timestamp.toISOString()
-      })),
       chatMessages: game.chatMessages.map(message => ({
         id: message.id,
         playerId: message.playerId,
