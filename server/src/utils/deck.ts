@@ -187,6 +187,7 @@ export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | n
   }
 
   if (currentHouse.length === enteredPlayers - 1) {
+    // Has lead suit
     if (playerHand.some(card => card.suit === leadSuit)) {
       const highestNonTrumpCard = findHighestCardInSuit(currentHouse, leadSuit, trumpSuit);
       if (highestNonTrumpCard && playerHand.some(card => card.suit === leadSuit && card.value > highestNonTrumpCard.value)) {
@@ -206,6 +207,7 @@ export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | n
         return playableIndex;
       }
     }
+    // No lead suit
     else{
       const highestTrumpCard = findHighestCardInSuit(currentHouse, trumpSuit, null);
       if(!highestTrumpCard){

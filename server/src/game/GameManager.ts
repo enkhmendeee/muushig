@@ -544,12 +544,14 @@ export class GameManager {
     });
     game.deck = [];
     game.tree = [];
+    game.houses = [];
     game.trumpCard = null;
-    game.gamePhase = 'dealing';
     const dealerIndex = game.players.findIndex(p => p.isDealer);
     game.players.find(p => p.isDealer)!.isDealer = false;
     game.dealerIndex = (dealerIndex + 1) % game.players.length;
     game.players[game.dealerIndex].isDealer = true;
+    this.broadcastCallback?.(game.id);
+    this.startGame(game.id);
     this.broadcastCallback?.(game.id);
   }
 

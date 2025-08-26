@@ -18,6 +18,7 @@ const GameRoom: React.FC<{
   const [botActionMessage, setBotActionMessage] = useState<string>('');
   const [cardOrder, setCardOrder] = useState<number[]>([]);
   const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null);
+  const [isDraggingToPlay, setIsDraggingToPlay] = useState(false);
   const actualPlayerIndex = gameState.players.findIndex(player => player.id === currentPlayer.id);
   const prevPlayersRef = React.useRef(gameState.players);
   
@@ -27,7 +28,18 @@ const GameRoom: React.FC<{
   // Initialize card order when hand changes
   useEffect(() => {
     if (Array.isArray(updatedCurrentPlayer.hand)) {
-      setCardOrder(updatedCurrentPlayer.hand.map((_, index) => index));
+      // Filter out indices that no longer exist in the hand
+      setCardOrder(prevOrder => {
+        const handArray = updatedCurrentPlayer.hand as any[];
+        const newOrder = prevOrder.filter(index => index < handArray.length);
+        // Add any new indices that might have been added
+        for (let i = 0; i < handArray.length; i++) {
+          if (!newOrder.includes(i)) {
+            newOrder.push(i);
+          }
+        }
+        return newOrder;
+      });
     }
   }, [updatedCurrentPlayer.hand]);
 
@@ -222,9 +234,10 @@ const GameRoom: React.FC<{
     }
   };
 
-  // Drag and drop handlers for card reordering
+  // Drag and drop handlers for card reordering and playing
   const handleDragStart = (e: React.DragEvent, cardIndex: number) => {
     setDraggedCardIndex(cardIndex);
+    setIsDraggingToPlay(false);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/html', cardIndex.toString());
   };
@@ -232,6 +245,12 @@ const GameRoom: React.FC<{
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    
+    // Add visual feedback for play drop zone
+    const target = e.currentTarget as HTMLElement;
+    if (target.classList.contains('play-drop-zone')) {
+      target.classList.add('drag-over');
+    }
   };
 
   const handleDrop = (e: React.DragEvent, dropIndex: number) => {
@@ -254,8 +273,27 @@ const GameRoom: React.FC<{
     setDraggedCardIndex(null);
   };
 
+  const handleDropToPlay = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (draggedCardIndex === null || !canPlayCard) return;
+
+    const originalIndex = cardOrder[draggedCardIndex];
+    if (playableCards.includes(originalIndex)) {
+      handlePlayCard(originalIndex);
+    }
+    
+    setDraggedCardIndex(null);
+  };
+
   const handleDragEnd = () => {
     setDraggedCardIndex(null);
+    setIsDraggingToPlay(false);
+    
+    // Remove drag-over visual feedback
+    const dropZone = document.querySelector('.play-drop-zone');
+    if (dropZone) {
+      dropZone.classList.remove('drag-over');
+    }
   };
 
   const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
@@ -337,7 +375,20 @@ const GameRoom: React.FC<{
       <div className="game-table-container">
         <div className="game-table">
           {/* Central Table Area */}
-          <div className="table-center">
+          <div 
+            className={`table-center ${canPlayCard ? 'play-drop-zone' : ''}`}
+            aria-label={canPlayCard ? "Card drop zone" : undefined}
+            onDragOver={canPlayCard ? handleDragOver : undefined}
+            onDragLeave={(e) => {
+              if (canPlayCard && !e.currentTarget.contains(e.relatedTarget as Node)) {
+                e.currentTarget.classList.remove('drag-over');
+              }
+            }}
+            onDrop={canPlayCard ? (e) => handleDropToPlay(e) : undefined}
+            onKeyDown={canPlayCard ? (e) => e.preventDefault() : undefined}
+            onTouchStart={canPlayCard ? (e) => e.preventDefault() : undefined}
+            onMouseDown={canPlayCard ? (e) => e.preventDefault() : undefined}
+          >
             {/* Trump Card */}
             {gameState.trumpCard && (
               <div className="trump-card-new">
@@ -464,6 +515,8 @@ const GameRoom: React.FC<{
                     <div className="hand-cards">
                       {Array.isArray(player.hand) ? cardOrder.map((originalIndex, displayIndex) => {
                         const card = (player.hand as any[])[originalIndex];
+                        // Skip rendering if card doesn't exist (was played)
+                        if (!card) return null;
                         return (
                           <button 
                             key={`${card.suit}-${card.rank}-${originalIndex}-${displayIndex}`}
@@ -472,7 +525,7 @@ const GameRoom: React.FC<{
                             } ${selectedCardsForExchange.includes(originalIndex) ? 'selected-for-exchange' : ''} ${
                               draggedCardIndex === displayIndex ? 'dragging' : ''
                             }`}
-                            draggable={true}
+                            draggable={canPlayCard ? playableCards.includes(originalIndex) : true}
                             onDragStart={(e) => handleDragStart(e, displayIndex)}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, displayIndex)}
@@ -481,11 +534,9 @@ const GameRoom: React.FC<{
                               console.log(`Card clicked: originalIndex=${originalIndex}, displayIndex=${displayIndex}, canExchange=${canExchange}, isMyTurn=${isMyTurn}, canPlayCard=${canPlayCard}, playableCards=${playableCards}`);
                               if (canExchange) {
                                 handleCardSelectForExchange(originalIndex);
-                              } else if (canPlayCard && playableCards.includes(originalIndex)) {
-                                handlePlayCard(originalIndex);
                               }
                             }}
-                            disabled={(!canPlayCard && !canExchange) || (canPlayCard && !playableCards.includes(originalIndex))}
+                            disabled={canPlayCard && !playableCards.includes(originalIndex)}
                             aria-label={`Play ${card.rank} of ${card.suit}`}
                           >
                             <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>

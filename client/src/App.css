@@ -649,9 +649,10 @@ body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  cursor: pointer;
+  cursor: grab;
   transition: all 0.2s ease;
   font-size: 0.8rem;
+  user-select: none;
 }
 
 .hand-card:hover {
@@ -691,13 +692,43 @@ body {
   cursor: grabbing;
 }
 
-.hand-card {
-  cursor: grab;
-  user-select: none;
-}
+
 
 .hand-card:active {
   cursor: grabbing;
+}
+
+.play-drop-zone {
+  min-height: 100px;
+  min-width: 100px;
+  border: 2px dashed transparent;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.play-drop-zone.drag-over {
+  border-color: #27ae60;
+  background: rgba(39, 174, 96, 0.1);
+  box-shadow: 0 0 20px rgba(39, 174, 96, 0.3);
+}
+
+.play-drop-zone::before {
+  content: 'Drop card here to play';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #27ae60;
+  font-weight: bold;
+  font-size: 0.9rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.play-drop-zone.drag-over::before {
+  opacity: 1;
 }
 
 .opponent-cards {
