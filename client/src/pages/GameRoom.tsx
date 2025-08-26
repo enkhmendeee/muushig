@@ -16,17 +16,27 @@ const GameRoom: React.FC<{
   const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [isTrumpExchange, setIsTrumpExchange] = useState(false);
   const [botActionMessage, setBotActionMessage] = useState<string>('');
+  const [cardOrder, setCardOrder] = useState<number[]>([]);
+  const [draggedCardIndex, setDraggedCardIndex] = useState<number | null>(null);
   const actualPlayerIndex = gameState.players.findIndex(player => player.id === currentPlayer.id);
   const prevPlayersRef = React.useRef(gameState.players);
   
   // Update currentPlayer with latest data from gameState
   const updatedCurrentPlayer = gameState.players.find(player => player.id === currentPlayer.id) || currentPlayer;
 
+  // Initialize card order when hand changes
   useEffect(() => {
-    if (socket && gameState.gamePhase === 'playing') {
+    if (Array.isArray(updatedCurrentPlayer.hand)) {
+      setCardOrder(updatedCurrentPlayer.hand.map((_, index) => index));
+    }
+  }, [updatedCurrentPlayer.hand]);
+
+  useEffect(() => {
+    if (socket && gameState.gamePhase === 'playing' && isMyTurn) {
+      console.log('Fetching playable cards for player turn');
       socket.emit('get_playable_cards', { gameId: gameState.id });
     }
-  }, [socket, gameState.gamePhase, actualPlayerIndex]);
+  }, [socket, gameState.gamePhase, gameState.currentPlayerIndex, updatedCurrentPlayer.id]);
 
   useEffect(() => {
     if (!socket) return;
@@ -128,7 +138,14 @@ const GameRoom: React.FC<{
           // For trump exchange, only allow one card selection
           return [cardIndex];
         } else {
-          return [...prev, cardIndex];
+          // For regular exchange, limit to tree size
+          const maxExchangeable = gameState.tree.length;
+          if (prev.length >= maxExchangeable) {
+            // If already at max, don't add more cards
+            return prev;
+          } else {
+            return [...prev, cardIndex];
+          }
         }
       }
     });
@@ -144,7 +161,13 @@ const GameRoom: React.FC<{
         cardIndex: selectedCardsForExchange[0] 
       });
     } else {
-      // For regular exchange
+      // For regular exchange, validate against tree size
+      const maxExchangeable = gameState.tree.length;
+      if (selectedCardsForExchange.length > maxExchangeable) {
+        console.warn(`Cannot exchange ${selectedCardsForExchange.length} cards when only ${maxExchangeable} are available in tree`);
+        return;
+      }
+      
       socket.emit('exchange_cards', { 
         gameId: gameState.id, 
         cardIndices: selectedCardsForExchange 
@@ -169,9 +192,10 @@ const GameRoom: React.FC<{
     setIsTrumpExchange(false);
   };
 
-  const handleExchangeTrump = (cardIndex: number) => {
-    if (!socket) return;
-    socket.emit('exchange_trump', { gameId: gameState.id, cardIndex });
+  const handleOpenExchange = () => {
+    setIsTrumpExchange(false);
+    setSelectedCardsForExchange([]);
+    setShowExchangeModal(true);
   };
 
   const handleOpenTrumpExchange = () => {
@@ -198,10 +222,62 @@ const GameRoom: React.FC<{
     }
   };
 
+  // Drag and drop handlers for card reordering
+  const handleDragStart = (e: React.DragEvent, cardIndex: number) => {
+    setDraggedCardIndex(cardIndex);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', cardIndex.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedCardIndex === null) return;
+
+    setCardOrder(prevOrder => {
+      const newOrder = [...prevOrder];
+      const draggedCardOriginalIndex = newOrder[draggedCardIndex];
+      
+      // Remove the dragged card from its current position
+      newOrder.splice(draggedCardIndex, 1);
+      
+      // Insert it at the new position
+      newOrder.splice(dropIndex, 0, draggedCardOriginalIndex);
+      
+      return newOrder;
+    });
+    
+    setDraggedCardIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedCardIndex(null);
+  };
+
   const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
   const canMakeDecision = gameState.gamePhase === 'dealing' && updatedCurrentPlayer.enteredRound === undefined && isMyTurn;
   const canExchange = gameState.gamePhase === 'exchanging' && updatedCurrentPlayer.enteredRound === true && !updatedCurrentPlayer.hasExchanged && isMyTurn;
-  const canExchangeTrump = gameState.gamePhase === 'trump_exchanging' && updatedCurrentPlayer.enteredRound === true && updatedCurrentPlayer.isDealer && !updatedCurrentPlayer.hasExchanged && gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
+  const canExchangeTrump = gameState.gamePhase === 'trump_exchanging' && updatedCurrentPlayer.enteredRound === true && updatedCurrentPlayer.isDealer && gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
+  const canPlayCard = gameState.gamePhase === 'playing' && updatedCurrentPlayer.enteredRound === true && isMyTurn;
+
+  // Debug card playing state
+  console.log(`Card playing debug:`, {
+    gamePhase: gameState.gamePhase,
+    currentPlayerIndex: gameState.currentPlayerIndex,
+    currentPlayerName: gameState.players[gameState.currentPlayerIndex]?.name,
+    myPlayerName: updatedCurrentPlayer.name,
+    myPlayerId: updatedCurrentPlayer.id,
+    currentPlayerId: gameState.players[gameState.currentPlayerIndex]?.id,
+    isMyTurn,
+    enteredRound: updatedCurrentPlayer.enteredRound,
+    canPlayCard,
+    playableCards,
+    playableCardsLength: playableCards.length
+  });
 
   // Calculate player positions around the table
   const getPlayerPosition = (index: number, totalPlayers: number, actualPlayerIndex: number) => {
@@ -286,6 +362,7 @@ const GameRoom: React.FC<{
             {/* Current House */}
             {gameState.currentHouse.length > 0 && (
               <div className="current-house-new">
+                <div className="house-label">Current House</div>
                 <div className="house-cards-new">
                   {gameState.currentHouse.map((houseCard, index) => (
                     <div key={`${houseCard.playerId}-${houseCard.card.suit}-${houseCard.card.rank}-${index}`} className="house-card-new">
@@ -301,6 +378,13 @@ const GameRoom: React.FC<{
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Completed Houses */}
+            {gameState.houses.length > 0 && (
+              <div className="completed-houses">
+                <div className="houses-label">Completed Houses: {gameState.houses.length}/5</div>
               </div>
             )}
 
@@ -323,6 +407,13 @@ const GameRoom: React.FC<{
               <div className="game-status">
                 {gameState.players[gameState.currentPlayerIndex]?.isBot ? '🤖 ' : ''}
                 {gameState.players[gameState.currentPlayerIndex]?.name} is exchanging trump card...
+                {gameState.players[gameState.currentPlayerIndex]?.isBot && ' (thinking...)'}
+              </div>
+            )}
+            {gameState.gamePhase === 'playing' && (
+              <div className="game-status">
+                {gameState.players[gameState.currentPlayerIndex]?.isBot ? '🤖 ' : ''}
+                {gameState.players[gameState.currentPlayerIndex]?.name} is playing a card...
                 {gameState.players[gameState.currentPlayerIndex]?.isBot && ' (thinking...)'}
               </div>
             )}
@@ -371,30 +462,41 @@ const GameRoom: React.FC<{
                   {isCurrentPlayer ? (
                     // Show actual cards for current player
                     <div className="hand-cards">
-                      {Array.isArray(player.hand) ? player.hand.map((card, cardIndex) => (
-                        <button 
-                          key={`${card.suit}-${card.rank}-${cardIndex}`}
-                          className={`card hand-card ${playableCards.includes(cardIndex) ? 'playable' : ''} ${
-                            isMyTurn ? 'my-turn' : ''
-                          } ${selectedCardsForExchange.includes(cardIndex) ? 'selected-for-exchange' : ''}`}
-                          onClick={() => {
-                            if (canExchange) {
-                              handleCardSelectForExchange(cardIndex);
-                            } else if (isMyTurn && playableCards.includes(cardIndex)) {
-                              handlePlayCard(cardIndex);
-                            }
-                          }}
-                          disabled={!isMyTurn || (!canExchange && !playableCards.includes(cardIndex))}
-                          aria-label={`Play ${card.rank} of ${card.suit}`}
-                        >
-                          <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
-                            {card.rank}
-                          </span>
-                          <span className={`card-suit ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
-                            {getSuitSymbol(card.suit)}
-                          </span>
-                        </button>
-                      )) : (
+                      {Array.isArray(player.hand) ? cardOrder.map((originalIndex, displayIndex) => {
+                        const card = (player.hand as any[])[originalIndex];
+                        return (
+                          <button 
+                            key={`${card.suit}-${card.rank}-${originalIndex}-${displayIndex}`}
+                            className={`card hand-card ${playableCards.includes(originalIndex) ? 'playable' : ''} ${
+                              canPlayCard ? 'my-turn' : ''
+                            } ${selectedCardsForExchange.includes(originalIndex) ? 'selected-for-exchange' : ''} ${
+                              draggedCardIndex === displayIndex ? 'dragging' : ''
+                            }`}
+                            draggable={true}
+                            onDragStart={(e) => handleDragStart(e, displayIndex)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, displayIndex)}
+                            onDragEnd={handleDragEnd}
+                            onClick={() => {
+                              console.log(`Card clicked: originalIndex=${originalIndex}, displayIndex=${displayIndex}, canExchange=${canExchange}, isMyTurn=${isMyTurn}, canPlayCard=${canPlayCard}, playableCards=${playableCards}`);
+                              if (canExchange) {
+                                handleCardSelectForExchange(originalIndex);
+                              } else if (canPlayCard && playableCards.includes(originalIndex)) {
+                                handlePlayCard(originalIndex);
+                              }
+                            }}
+                            disabled={(!canPlayCard && !canExchange) || (canPlayCard && !playableCards.includes(originalIndex))}
+                            aria-label={`Play ${card.rank} of ${card.suit}`}
+                          >
+                            <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
+                              {card.rank}
+                            </span>
+                            <span className={`card-suit ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
+                              {getSuitSymbol(card.suit)}
+                            </span>
+                          </button>
+                        );
+                      }) : (
                         <div className="card-count">{player.hand} cards</div>
                       )}
                     </div>
@@ -430,7 +532,7 @@ const GameRoom: React.FC<{
           <button onClick={handleReady} className="ready-btn-new">Ready</button>
         )}
 
-        {(gameState.gamePhase === 'waiting' || gameState.gamePhase === 'playing') && updatedCurrentPlayer.isReady && (
+        {(gameState.gamePhase === 'waiting' ) && updatedCurrentPlayer.isReady && (
           <button onClick={handleUnready} className="unready-btn-new">Unready</button>
         )}
         
@@ -448,11 +550,10 @@ const GameRoom: React.FC<{
         {canExchange && (
           <div className="exchange-controls">
             <button 
-              onClick={handleExchangeCards} 
-              disabled={selectedCardsForExchange.length === 0}
+              onClick={handleOpenExchange}
               className="exchange-btn"
             >
-              Exchange {selectedCardsForExchange.length} Cards
+              Exchange Cards ({gameState.tree.length} available)
             </button>
             <button onClick={handleSkipExchange} className="skip-exchange-btn">
               Skip Exchange
@@ -500,30 +601,37 @@ const GameRoom: React.FC<{
               }
             </p>
             <div className="exchange-cards-preview">
-              {Array.isArray(updatedCurrentPlayer.hand) && updatedCurrentPlayer.hand.map((card, index) => (
-                <button
-                  key={`${card.suit}-${card.rank}-${index}`}
-                  className={`card exchange-card ${selectedCardsForExchange.includes(index) ? 'selected' : ''}`}
-                  onClick={() => handleCardSelectForExchange(index)}
-                >
-                  <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
-                    {card.rank}
-                  </span>
-                  <span className={`card-suit ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
-                    {getSuitSymbol(card.suit)}
-                  </span>
-                </button>
-              ))}
+              {Array.isArray(updatedCurrentPlayer.hand) && updatedCurrentPlayer.hand.map((card, index) => {
+                const isSelected = selectedCardsForExchange.includes(index);
+                const maxReached = !isTrumpExchange && selectedCardsForExchange.length >= gameState.tree.length && !isSelected;
+                
+                return (
+                  <button
+                    key={`${card.suit}-${card.rank}-${index}`}
+                    className={`card exchange-card ${isSelected ? 'selected' : ''} ${maxReached ? 'disabled' : ''}`}
+                    onClick={() => handleCardSelectForExchange(index)}
+                    disabled={maxReached}
+                    title={maxReached ? `Cannot select more than ${gameState.tree.length} cards` : ''}
+                  >
+                    <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
+                      {card.rank}
+                    </span>
+                    <span className={`card-suit ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
+                      {getSuitSymbol(card.suit)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <div className="exchange-modal-buttons">
               <button 
                 onClick={handleExchangeCards}
-                disabled={selectedCardsForExchange.length === 0}
+                disabled={selectedCardsForExchange.length === 0 || (!isTrumpExchange && selectedCardsForExchange.length > gameState.tree.length)}
                 className="confirm-exchange-btn"
               >
                 {isTrumpExchange 
                   ? `Exchange ${selectedCardsForExchange.length} Card`
-                  : `Exchange ${selectedCardsForExchange.length} Cards`
+                  : `Exchange ${selectedCardsForExchange.length} Cards (max ${gameState.tree.length})`
                 }
               </button>
               <button onClick={handleSkipExchange} className="skip-exchange-btn">

@@ -302,25 +302,52 @@ export class GameManager {
       return false;
     }
 
+    // Validate that player isn't trying to exchange more cards than available in tree
+    if (cardIndices.length > game.tree.length) {
+      console.warn(`Player ${player.name} tried to exchange ${cardIndices.length} cards but only ${game.tree.length} are available in tree`);
+      return false;
+    }
+
     // Exchange cards
     const cardsToExchange = cardIndices.map(i => player.hand[i]).filter(card => card);
     const newCards = game.tree.splice(0, cardsToExchange.length);
     
-    // Remove old cards and add new ones
-    const reversedIndices = [...cardIndices].reverse();
-    reversedIndices.forEach(i => {
-      if (i >= 0 && i < player.hand.length) {
-        player.hand.splice(i, 1);
-      }
-    });
+    console.log(`Exchange: Player ${player.name} exchanging ${cardsToExchange.length} cards, hand size before: ${player.hand.length}`);
     
-    player.hand.push(...newCards);
+    // Remove old cards by creating a new hand without the exchanged cards
+    const newHand = player.hand.filter((_, index) => !cardIndices.includes(index));
+    
+    // Replace the hand with the new hand plus the new cards
+    player.hand = [...newHand, ...newCards];
+    
+    // Ensure hand size is exactly 5 cards
+    if (player.hand.length !== 5) {
+      console.error(`Player ${player.name} has ${player.hand.length} cards after exchange, should be 5`);
+      // Fix by trimming or padding to exactly 5 cards
+      if (player.hand.length > 5) {
+        player.hand = player.hand.slice(0, 5);
+      } else if (player.hand.length < 5 && game.tree.length > 0) {
+        const additionalCards = game.tree.splice(0, 5 - player.hand.length);
+        player.hand.push(...additionalCards);
+      }
+    }
+    
+    console.log(`Exchange: Player ${player.name} hand size after: ${player.hand.length}`);
+    
     player.hasExchanged = true;
     game.lastActivity = new Date();
-    this.nextTurn(game);
 
-    if (game.players.filter(p => p.enteredRound).every(p => p.hasExchanged) || game.tree.length === 0) {
+    // Debug exchange completion check
+    const enteredPlayers = game.players.filter(p => p.enteredRound);
+    const allExchanged = enteredPlayers.every(p => p.hasExchanged);
+    console.log(`Exchange check: enteredPlayers=${enteredPlayers.length}, allExchanged=${allExchanged}, treeLength=${game.tree.length}`);
+    enteredPlayers.forEach(p => {
+      console.log(`  Player ${p.name}: entered=${p.enteredRound}, exchanged=${p.hasExchanged}`);
+    });
+
+    if (allExchanged || game.tree.length === 0) {
       // All players who entered have exchanged or tree is empty
+      console.log(`Moving to trump_exchanging phase`);
       game.gamePhase = 'trump_exchanging';
       // Set current player to dealer for trump exchange
       game.currentPlayerIndex = game.dealerIndex;
@@ -329,10 +356,13 @@ export class GameManager {
       // Trigger bot turn if dealer is a bot
       this.checkAndTriggerBotTurn(gameId);
     } else {
+      console.log(`Continuing exchange phase, moving to next player`);
       // Broadcast state change
       this.broadcastCallback?.(gameId);
+      this.nextTurnExchange(game);
       // Trigger bot turn if next player is a bot
       this.checkAndTriggerBotTurn(gameId);
+      this.broadcastCallback?.(gameId);
     }
     return true;
   }
@@ -354,9 +384,10 @@ export class GameManager {
       game.lastActivity = new Date();
       
       game.gamePhase = 'playing';
-      this.nextTurn(game);
       // Broadcast state change
       this.broadcastCallback?.(gameId);
+      this.nextTurn(game);
+      this.checkAndTriggerBotTurn(gameId);
       return true;
     }
 
@@ -371,9 +402,10 @@ export class GameManager {
     game.lastActivity = new Date();
     
     game.gamePhase = 'playing';
-    this.nextTurn(game);
     // Broadcast state change
     this.broadcastCallback?.(gameId);
+    this.nextTurn(game);
+    this.checkAndTriggerBotTurn(gameId);
 
     return true;
   }
@@ -381,16 +413,29 @@ export class GameManager {
   playableCards(gameId: string, playerId: string): number[] {
     const game = this.games.get(gameId);
     if (!game || game.gamePhase !== 'playing') {
+      console.log(`playableCards: game not found or wrong phase. gamePhase=${game?.gamePhase}`);
       return [];
     }
 
     const player = game.players.find(p => p.id === playerId);
     if (!player) {
+      console.log(`playableCards: player not found. playerId=${playerId}`);
       return [];
     }
     
     const currentHouseCards = game.currentHouse.map(hc => hc.card);
     const playableCards = findPlayableCards(player.hand, game.leadSuit, game.trumpCard?.suit || null, currentHouseCards, game.players.filter(p => p.enteredRound).length);
+    
+    console.log(`playableCards for ${player.name}:`, {
+      playerId,
+      handSize: player.hand.length,
+      leadSuit: game.leadSuit,
+      trumpSuit: game.trumpCard?.suit,
+      currentHouseSize: currentHouseCards.length,
+      enteredPlayers: game.players.filter(p => p.enteredRound).length,
+      playableCards
+    });
+    
     return playableCards;
   }
 
@@ -434,6 +479,8 @@ export class GameManager {
     // Check if house is complete
     if (game.currentHouse.length === game.players.filter(p => p.enteredRound).length) {
       this.completeHouse(game);
+      this.broadcastCallback?.(gameId);
+      this.checkAndTriggerBotTurn(gameId);
     } else {
       // Move to next player
       this.nextTurn(game);
@@ -446,6 +493,7 @@ export class GameManager {
     // Check if game is finished
     if (game.houses.length === 5) {
       this.endGame(game);
+      this.broadcastCallback?.(gameId);
     }
 
     return true;
@@ -479,10 +527,8 @@ export class GameManager {
       // Reset for next house
       game.currentHouse = [];
       game.leadSuit = null;
-      const dealerIndex = game.players.findIndex(p => p.isDealer);
-      game.players.find(p => p.isMouth)!.isMouth = false;
-      game.players.find(p => p.isDealer)!.isDealer = false;
-      game.dealerIndex = (dealerIndex + 1) % game.players.length;
+      game.currentPlayerIndex = game.players.findIndex(p => p.id === winner?.id);
+      this.broadcastCallback?.(game.id);
     }
   }
 
@@ -499,16 +545,31 @@ export class GameManager {
     game.deck = [];
     game.tree = [];
     game.trumpCard = null;
-    game.gamePhase = 'waiting';
+    game.gamePhase = 'dealing';
+    const dealerIndex = game.players.findIndex(p => p.isDealer);
+    game.players.find(p => p.isDealer)!.isDealer = false;
+    game.dealerIndex = (dealerIndex + 1) % game.players.length;
+    game.players[game.dealerIndex].isDealer = true;
+    this.broadcastCallback?.(game.id);
   }
 
   private nextTurn(game: GameState): void {
     // Find next player who has entered
     let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
-      while (!game.players[nextIndex].enteredRound) {
+    while (!game.players[nextIndex].enteredRound) {
       nextIndex = (nextIndex + 1) % game.players.length;
     }
     game.currentPlayerIndex = nextIndex;
+  }
+
+  private nextTurnExchange(game: GameState): void {
+    // Find next player who has entered but hasn't exchanged yet
+    let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
+    while (!game.players[nextIndex].enteredRound || game.players[nextIndex].hasExchanged) {
+      nextIndex = (nextIndex + 1) % game.players.length;
+    }
+    game.currentPlayerIndex = nextIndex;
+    console.log(`Next exchange turn: ${game.players[nextIndex].name}`);
   }
 
   private nextTurnEnter(game: GameState): void {
@@ -674,7 +735,9 @@ export class GameManager {
     const game = this.games.get(gameId);
     if (!game) return;
 
+    console.log(`Bot ${botPlayer.name} starting exchange decision...`);
     const cardIndices = await this.botManager.makeBotDecision(game, botPlayer, 'exchange');
+    console.log(`Bot ${botPlayer.name} decided to exchange cards:`, cardIndices);
     this.exchangeCards(gameId, botPlayer.id, cardIndices);
   }
 
@@ -705,11 +768,20 @@ export class GameManager {
     const game = this.games.get(gameId);
     if (!game) return;
 
-    if (game.players[game.currentPlayerIndex]?.isBot) {
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    console.log(`Checking bot turn: currentPlayer=${currentPlayer?.name}, isBot=${currentPlayer?.isBot}, phase=${game.gamePhase}, currentPlayerIndex=${game.currentPlayerIndex}`);
+    if ((game.gamePhase === 'exchanging' || game.gamePhase === 'trump_exchanging') && !currentPlayer.enteredRound) {
+      this.nextTurn(game);
+    }
+    
+    if (currentPlayer?.isBot) {
+      console.log(`Triggering bot turn for ${currentPlayer.name} in phase ${game.gamePhase}`);
       // Broadcast state change before bot starts thinking
       this.broadcastCallback?.(gameId);
       // Trigger bot turn asynchronously
       this.handleBotTurn(gameId);
+    } else {
+      console.log(`Current player ${currentPlayer?.name} is not a bot, no action needed`);
     }
   }
 }

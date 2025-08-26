@@ -434,6 +434,27 @@ body {
   gap: 0.5rem;
 }
 
+.house-label {
+  color: #ffd700;
+  font-weight: bold;
+  font-size: 0.9rem;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.completed-houses {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.houses-label {
+  color: #2ecc71;
+  font-weight: bold;
+  font-size: 0.8rem;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
 .house-cards-new {
   display: flex;
   gap: 0.5rem;
@@ -526,13 +547,13 @@ body {
   z-index: 15;
 }
 
-.player-position.active-turn {
+.player-position.active-turn .player-avatar {
   animation: activeTurn 1s ease-in-out infinite;
 }
 
 @keyframes activeTurn {
-  0%, 100% { transform: scale(1) translate(var(--x, 0px), var(--y, 0px)); }
-  50% { transform: scale(1.05) translate(var(--x, 0px), var(--y, 0px)); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 /* Player Avatar */
@@ -661,6 +682,22 @@ body {
 .hand-card:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.hand-card.dragging {
+  opacity: 0.5;
+  transform: rotate(5deg) scale(1.1);
+  z-index: 1000;
+  cursor: grabbing;
+}
+
+.hand-card {
+  cursor: grab;
+  user-select: none;
+}
+
+.hand-card:active {
+  cursor: grabbing;
 }
 
 .opponent-cards {
@@ -910,6 +947,17 @@ body {
   border-color: #f39c12;
   box-shadow: 0 0 15px rgba(243, 156, 18, 0.8);
   transform: translateY(-5px);
+}
+
+.exchange-card.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(50%);
+}
+
+.exchange-card.disabled:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .exchange-modal-buttons {

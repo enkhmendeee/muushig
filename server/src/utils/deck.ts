@@ -104,10 +104,20 @@ export function canPlayCard(card: Card, leadSuit: Card['suit'] | null, trumpSuit
 export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | null, trumpSuit: Card['suit'] | null, currentHouse: Card[], enteredPlayers: number): number[] {
   const playableIndex: number[] = [];
 
+  console.log(`findPlayableCards debug:`, {
+    handSize: playerHand.length,
+    leadSuit,
+    trumpSuit,
+    currentHouseLength: currentHouse.length,
+    enteredPlayers
+  });
+
   if (currentHouse.length === 0) {
+    // First card of the house - all cards are playable
     for (let i = 0; i < playerHand.length; i++) {
       playableIndex.push(i);
     }
+    console.log(`First card of house - all cards playable:`, playableIndex);
     return playableIndex;
   }
   if (currentHouse.length >= 1 && currentHouse.length < enteredPlayers - 1) {
@@ -117,7 +127,7 @@ export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | n
         playableIndex.push(playerHand.findIndex(card => card.suit === leadSuit && card.rank === 'A'));
         return playableIndex;
       }
-      if (playerHand.some(card => card.suit === leadSuit && card.value > highestNonTrumpCard.value)) {
+      if (highestNonTrumpCard && playerHand.some(card => card.suit === leadSuit && card.value > highestNonTrumpCard.value)) {
         playerHand.forEach((card, index) => {
           if (card.suit === leadSuit && card.value > highestNonTrumpCard.value) {
             playableIndex.push(index);
@@ -151,35 +161,102 @@ export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | n
         }
         return playableIndex;
       }
-      else{
-        if(playerHand.some(card => card.suit === trumpSuit)){
-          if(findHighestCardInSuit(playerHand, trumpSuit, null).value > highestTrumpCard.value){
-            playerHand.forEach((card, index) => {
-              if (card.suit === trumpSuit && card.value > highestTrumpCard.value) {
-                playableIndex.push(index);
-              }
-            });
-            return playableIndex;
-          }
-          else{
-            playerHand.forEach((card, index) => {
-              if (card.suit === trumpSuit) {
-                playableIndex.push(index);
-              }
-            });
-            return playableIndex;
-          }
-        }
-        else{
+      if(playerHand.some(card => card.suit === trumpSuit)){
+        if(findHighestCardInSuit(playerHand, trumpSuit, null).value > highestTrumpCard.value){
           playerHand.forEach((card, index) => {
-            playableIndex.push(index);
+            if (card.suit === trumpSuit && card.value > highestTrumpCard.value) {
+              playableIndex.push(index);
+            }
+          });
+          return playableIndex;
+        } else {
+          playerHand.forEach((card, index) => {
+            if (card.suit === trumpSuit) {
+              playableIndex.push(index);
+            }
           });
           return playableIndex;
         }
+      } else {
+        playerHand.forEach((card, index) => {
+          playableIndex.push(index);
+        });
+        return playableIndex;
       }
     }
   }
 
+  if (currentHouse.length === enteredPlayers - 1) {
+    if (playerHand.some(card => card.suit === leadSuit)) {
+      const highestNonTrumpCard = findHighestCardInSuit(currentHouse, leadSuit, trumpSuit);
+      if (highestNonTrumpCard && playerHand.some(card => card.suit === leadSuit && card.value > highestNonTrumpCard.value)) {
+        playerHand.forEach((card, index) => {
+          if (card.suit === leadSuit && card.value > highestNonTrumpCard.value) {
+            playableIndex.push(index);
+          }
+        });
+        return playableIndex;
+      }
+      else{
+        playerHand.forEach((card, index) => {
+          if (card.suit === leadSuit) {
+            playableIndex.push(index);
+          }
+        });
+        return playableIndex;
+      }
+    }
+    else{
+      const highestTrumpCard = findHighestCardInSuit(currentHouse, trumpSuit, null);
+      if(!highestTrumpCard){
+        if(playerHand.some(card => card.suit === trumpSuit)){
+          playerHand.forEach((card, index) => {
+            if (card.suit === trumpSuit) {
+              playableIndex.push(index);
+            }
+          });
+        }
+        else{
+          playerHand.forEach((card, index) => {
+              playableIndex.push(index);
+          });
+        }
+        return playableIndex;
+      }
+      if(playerHand.some(card => card.suit === trumpSuit)){
+        if(findHighestCardInSuit(playerHand, trumpSuit, null).value > highestTrumpCard.value){
+          playerHand.forEach((card, index) => {
+            if (card.suit === trumpSuit && card.value > highestTrumpCard.value) {
+              playableIndex.push(index);
+            }
+          });
+          return playableIndex;
+        } else {
+          playerHand.forEach((card, index) => {
+            if (card.suit === trumpSuit) {
+              playableIndex.push(index);
+            }
+          });
+          return playableIndex;
+        }
+      } else {
+        playerHand.forEach((card, index) => {
+          playableIndex.push(index);
+        });
+        return playableIndex;
+      }
+    }
+  }
+
+  // Fallback: if no cards were determined to be playable, allow all cards
+  if (playableIndex.length === 0) {
+    console.log(`No playable cards found, allowing all cards as fallback`);
+    for (let i = 0; i < playerHand.length; i++) {
+      playableIndex.push(i);
+    }
+  }
+
+  console.log(`Final playable cards:`, playableIndex);
   return playableIndex;
 }
 
