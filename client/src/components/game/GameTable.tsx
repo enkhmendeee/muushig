@@ -48,7 +48,7 @@ const GameTable: React.FC<GameTableProps> = ({
     <div className="game-table-container">
       <div className="game-table">
         {/* Central Table Area */}
-        <div 
+        <section 
           className={`table-center ${canPlayCard ? 'play-drop-zone' : ''}`}
           aria-label={canPlayCard ? "Card drop zone" : undefined}
           onDragOver={canPlayCard ? onDragOver : undefined}
@@ -58,9 +58,6 @@ const GameTable: React.FC<GameTableProps> = ({
             }
           }}
           onDrop={canPlayCard ? onDropToPlay : undefined}
-          onKeyDown={canPlayCard ? (e) => e.preventDefault() : undefined}
-          onTouchStart={canPlayCard ? (e) => e.preventDefault() : undefined}
-          onMouseDown={canPlayCard ? (e) => e.preventDefault() : undefined}
         >
           {/* Trump Card */}
           {gameState.trumpCard && (
@@ -148,7 +145,7 @@ const GameTable: React.FC<GameTableProps> = ({
               {botActionMessage}
             </div>
           )}
-        </div>
+        </section>
 
         {/* Players Around the Table */}
         {gameState.players.map((player, index) => {

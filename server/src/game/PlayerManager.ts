@@ -53,7 +53,6 @@ export class PlayerManager {
       return false;
     }
 
-    const playerName = player.name;
     game.players = game.players.filter(p => p.id !== playerId);
     game.lastActivity = new Date();
     
@@ -174,27 +173,8 @@ export class PlayerManager {
       return false;
     }
 
-    // Exchange cards
-    const cardsToExchange = cardIndices.map(i => player.hand[i]).filter(card => card);
-    const newCards = game.tree.splice(0, cardsToExchange.length);
-    
-    // Remove old cards by creating a new hand without the exchanged cards
-    const newHand = player.hand.filter((_, index) => !cardIndices.includes(index));
-    
-    // Replace the hand with the new hand plus the new cards
-    player.hand = [...newHand, ...newCards];
-    
-    // Ensure hand size is exactly 5 cards
-    if (player.hand.length !== 5) {
-      // Fix by trimming or padding to exactly 5 cards
-      if (player.hand.length > 5) {
-        player.hand = player.hand.slice(0, 5);
-      } else if (player.hand.length < 5 && game.tree.length > 0) {
-        const additionalCards = game.tree.splice(0, 5 - player.hand.length);
-        player.hand.push(...additionalCards);
-      }
-    }
-    
+    this.swapCards(game, player, cardIndices);
+
     player.hasExchanged = true;
     game.lastActivity = new Date();
 
@@ -210,19 +190,7 @@ export class PlayerManager {
       if (!dealer.enteredRound) {
         // Dealer skipped the round, skip trump exchange and go directly to playing
         game.gamePhase = 'playing';
-        // Set current player to first player who entered, starting from player after dealer
-        let firstEnteredPlayerIndex = -1;
-        for (let i = 1; i <= game.players.length; i++) {
-          const playerIndex = (game.dealerIndex + i) % game.players.length;
-          const player = game.players[playerIndex];
-          if (player.enteredRound) {
-            firstEnteredPlayerIndex = playerIndex;
-            break;
-          }
-        }
-        if (firstEnteredPlayerIndex !== -1) {
-          game.currentPlayerIndex = firstEnteredPlayerIndex;
-        }
+        this.setNextPlayerFirstTurn(game);
       } else {
         // Dealer entered, proceed with trump exchange
         game.gamePhase = 'trump_exchanging';
@@ -311,6 +279,45 @@ export class PlayerManager {
     }
 
     return true;
+  }
+  private swapCards(game: GameState, player: Player, cardIndices: number[]): boolean {
+    // Exchange cards
+    const cardsToExchange = cardIndices.map(i => player.hand[i]).filter(card => card);
+    const newCards = game.tree.splice(0, cardsToExchange.length);
+    
+    // Remove old cards by creating a new hand without the exchanged cards
+    const newHand = player.hand.filter((_, index) => !cardIndices.includes(index));
+    
+    // Replace the hand with the new hand plus the new cards
+    player.hand = [...newHand, ...newCards];
+    
+    // Ensure hand size is exactly 5 cards
+    if (player.hand.length !== 5) {
+      // Fix by trimming or padding to exactly 5 cards
+      if (player.hand.length > 5) {
+        player.hand = player.hand.slice(0, 5);
+      } else if (player.hand.length < 5 && game.tree.length > 0) {
+        const additionalCards = game.tree.splice(0, 5 - player.hand.length);
+        player.hand.push(...additionalCards);
+      }
+    }
+    return true;
+  }
+
+  private setNextPlayerFirstTurn(game: GameState): void {
+    // Set current player to first player who entered, starting from player after dealer
+    let firstEnteredPlayerIndex = -1;
+    for (let i = 1; i <= game.players.length; i++) {
+      const playerIndex = (game.dealerIndex + i) % game.players.length;
+      const player = game.players[playerIndex];
+      if (player.enteredRound) {
+        firstEnteredPlayerIndex = playerIndex;
+        break;
+      }
+    }
+    if (firstEnteredPlayerIndex !== -1) {
+      game.currentPlayerIndex = firstEnteredPlayerIndex;
+    }
   }
 
   private getBotToReplace(game: GameState): Player | null {

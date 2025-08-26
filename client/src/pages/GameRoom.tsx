@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
-import { Player, GameState, ChatMessage } from '../types/game';
-import { getSuitSymbol } from '../utils/gameUtils';
+import { Player, GameState } from '../types/game';
 import GameHeader from '../components/layout/GameHeader';
 import GameTable from '../components/game/GameTable';
 import GameControls from '../components/game/GameControls';
@@ -31,12 +30,8 @@ const GameRoom: React.FC<{
 
   // Use drag and drop hook
   const {
-    draggedCardIndex,
-    handleDragStart,
     handleDragOver,
-    handleDrop,
     handleDropToPlay,
-    handleDragEnd
   } = useDragAndDrop();
 
   // Initialize card order when hand changes
@@ -158,21 +153,21 @@ const GameRoom: React.FC<{
     setSelectedCardsForExchange(prev => {
       if (prev.includes(cardIndex)) {
         return prev.filter(index => index !== cardIndex);
-      } else {
-        if (isTrumpExchange) {
-          // For trump exchange, only allow one card selection
-          return [cardIndex];
-        } else {
-          // For regular exchange, limit to tree size
-          const maxExchangeable = gameState.tree.length;
-          if (prev.length >= maxExchangeable) {
-            // If already at max, don't add more cards
-            return prev;
-          } else {
-            return [...prev, cardIndex];
-          }
-        }
       }
+      
+      if (isTrumpExchange) {
+        // For trump exchange, only allow one card selection
+        return [cardIndex];
+      }
+      
+      // For regular exchange, limit to tree size
+      const maxExchangeable = gameState.tree.length;
+      if (prev.length >= maxExchangeable) {
+        // If already at max, don't add more cards
+        return prev;
+      }
+      
+      return [...prev, cardIndex];
     });
   };
 

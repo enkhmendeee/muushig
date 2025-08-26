@@ -1,9 +1,8 @@
-import { GameState, Player, House, ChatMessage } from '../types/game';
+import { GameState, Player, ChatMessage } from '../types/game';
 import { BotManager } from './BotManager';
 import { GameStateManager } from './GameStateManager';
 import { PlayerManager } from './PlayerManager';
 import { ChatService } from '../services/ChatService';
-import { v4 as uuidv4 } from 'uuid';
 
 export class GameManager {
   private readonly games: Map<string, GameState> = new Map();
@@ -266,7 +265,8 @@ export class GameManager {
     this.gameStateManager.endGame(game);
     
     if (game.gamePhase === 'finished') {
-      this.sendSystemMessage(game.id, `Game finished! Final scores: ${game.players.map(p => `${p.name}: ${p.score}`).join(', ')}`);
+      const finalScores = game.players.map(p => `${p.name}: ${p.score}`).join(', ');
+      this.sendSystemMessage(game.id, `Game finished! Final scores: ${finalScores}`);
     } else {
       this.sendSystemMessage(game.id, `Round ${game.roundNumber - 1} finished! ${roundWinner.name} won with ${maxHouses} houses. Ready up for round ${game.roundNumber}!`);
     }

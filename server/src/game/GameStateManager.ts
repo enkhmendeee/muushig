@@ -1,4 +1,4 @@
-import { GameState, Player } from '../types/game';
+import { GameState} from '../types/game';
 import { createDeck, shuffleDeck, dealCards, findHighestCard, calculateScore, findPlayableCards } from '../utils/deck';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -134,20 +134,11 @@ export class GameStateManager {
   }
 
   endGame(game: GameState): void {
-    let roundWinner = game.players[0];
-    let maxHouses = 0;
-
     game.players.forEach(player => {
       const newScore = calculateScore(player.score, player.housesBuilt, player.enteredRound === true);
       
       // Update player score
       player.score = newScore;
-
-      // Find round winner (most houses built)
-      if (player.housesBuilt > maxHouses) {
-        maxHouses = player.housesBuilt;
-        roundWinner = player;
-      }
     });
 
     // Check if game is completely finished (any player has 0 or negative score)

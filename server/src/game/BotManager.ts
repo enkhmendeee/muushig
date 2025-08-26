@@ -113,7 +113,7 @@ export class BotManager {
       if (trumpCards.length > 0) {
         const lowestTrump = trumpCards.reduce((lowest, current) => 
           current.card.value < lowest.card.value ? current : lowest
-        );
+        , trumpCards[0]);
         return lowestTrump.index;
       }
       return 0; // Fallback to first card

@@ -1,12 +1,15 @@
 import { Card } from '../types/game';
 
+/* =========================
+ * Deck + dealing
+ * =======================*/
+
 export function createDeck(numPlayers: number = 5): Card[] {
   const suits: Card['suit'][] = ['hearts', 'diamonds', 'clubs', 'spades'];
-  
+
   // Determine which ranks to include based on player count
   let ranks: Card['rank'][] = ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-  
-  // Remove lower cards for fewer players
+
   if (numPlayers === 2) {
     ranks = ['J', 'Q', 'K', 'A']; // Remove 7, 8, 9, 10
   } else if (numPlayers === 3) {
@@ -15,9 +18,9 @@ export function createDeck(numPlayers: number = 5): Card[] {
     ranks = ['8', '9', '10', 'J', 'Q', 'K', 'A']; // Remove 7
   }
   // 5 players use all cards: 7, 8, 9, 10, J, Q, K, A
-  
+
   const deck: Card[] = [];
-  
+
   for (const suit of suits) {
     for (const rank of ranks) {
       deck.push({
@@ -27,7 +30,7 @@ export function createDeck(numPlayers: number = 5): Card[] {
       });
     }
   }
-  
+
   return deck;
 }
 
@@ -40,20 +43,24 @@ export function shuffleDeck(deck: Card[]): Card[] {
   return shuffled;
 }
 
-export function dealCards(deck: Card[], numPlayers: number, cardsPerPlayer: number = 5): {
+export function dealCards(
+  deck: Card[],
+  numPlayers: number,
+  cardsPerPlayer: number = 5
+): {
   hands: Card[][];
   remainingDeck: Card[];
   trumpCard: Card | null;
 } {
   const hands: Card[][] = [];
   const remainingDeck = [...deck];
-  
+
   // Initialize empty hands
   for (let i = 0; i < numPlayers; i++) {
     hands.push([]);
   }
-  
-  // Deal 5 cards to each player
+
+  // Deal 5 cards to each player (or cardsPerPlayer)
   for (let round = 0; round < cardsPerPlayer; round++) {
     for (let player = 0; player < numPlayers; player++) {
       if (remainingDeck.length > 0) {
@@ -62,10 +69,10 @@ export function dealCards(deck: Card[], numPlayers: number, cardsPerPlayer: numb
       }
     }
   }
-  
+
   // Set aside one card as trump card (face up)
   const trumpCard = remainingDeck.length > 0 ? remainingDeck.pop()! : null;
-  
+
   return { hands, remainingDeck, trumpCard };
 }
 
@@ -83,227 +90,195 @@ function getCardValue(rank: Card['rank']): number {
   }
 }
 
-export function canPlayCard(card: Card, leadSuit: Card['suit'] | null, trumpSuit: Card['suit'] | null, playerHand: Card[], currentHouse: Card[]): boolean {
-  // If no lead suit, any card can be played
-  if (!leadSuit) {
-    return true;
+/* =========================
+ * Helpers for playable-cards logic
+ * =======================*/
+
+const allIndices = (arr: unknown[]) => arr.map((_, i) => i);
+
+const indicesWhere = <T>(arr: T[], pred: (x: T, i: number) => boolean) =>
+  arr.reduce<number[]>((acc, x, i) => (pred(x, i) ? (acc.push(i), acc) : acc), []);
+
+const hasSuit = (hand: Card[], suit: Card['suit'] | null) =>
+  !!suit && hand.some(c => c.suit === suit);
+
+const suitIndices = (hand: Card[], suit: Card['suit'] | null) =>
+  suit ? indicesWhere(hand, c => c.suit === suit) : [];
+
+const higherThanInSuit = (hand: Card[], suit: Card['suit'] | null, minValue: number) =>
+  suit ? indicesWhere(hand, c => c.suit === suit && c.value > minValue) : [];
+
+const firstAceIndexInSuit = (hand: Card[], suit: Card['suit'] | null) =>
+  suit ? hand.findIndex(c => c.suit === suit && c.rank === 'A') : -1;
+
+const highestValue = (card?: Card | null) => card?.value ?? Number.NEGATIVE_INFINITY;
+
+/**
+ * If player cannot follow lead suit.
+ * Encodes: trump requirements and overtrump logic.
+ */
+function playableWhenNoLeadSuit(
+  playerHand: Card[],
+  currentHouse: Card[],
+  trumpSuit: Card['suit'] | null
+): number[] {
+  if (!trumpSuit) return allIndices(playerHand);
+
+  const highestTrumpOnTable = findHighestCardInSuit(currentHouse, trumpSuit, null);
+  const playerHasTrump = hasSuit(playerHand, trumpSuit);
+
+  // No trump on table: must play trump if you have it, else any card
+  if (!highestTrumpOnTable) {
+    return playerHasTrump ? suitIndices(playerHand, trumpSuit) : allIndices(playerHand);
   }
-  
-  // Check if player has cards of the lead suit
-  const hasLeadSuit = playerHand.some(c => c.suit === leadSuit);
-  
-  // If player has lead suit, they must play it
-  if (hasLeadSuit) {
-    return card.suit === leadSuit;
+
+  // Trump on table
+  if (playerHasTrump) {
+    const highestTrumpInHand = findHighestCardInSuit(playerHand, trumpSuit, null);
+    if (highestValue(highestTrumpInHand) > highestTrumpOnTable.value) {
+      // Must overtrump if you can
+      return higherThanInSuit(playerHand, trumpSuit, highestTrumpOnTable.value);
+    }
+    // Otherwise any trump is fine
+    return suitIndices(playerHand, trumpSuit);
   }
-  
-  // If no lead suit in hand, can play any card
-  return true;
+
+  // No trump in hand → any card
+  return allIndices(playerHand);
 }
 
-export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | null, trumpSuit: Card['suit'] | null, currentHouse: Card[], enteredPlayers: number): number[] {
-  const playableIndex: number[] = [];
+/**
+ * If player can follow lead suit.
+ * Enforces: Ace shortcut (mid-turn only), beat-highest-non-trump-if-possible; otherwise any lead suit.
+ */
+function playableWhenHasLeadSuit(
+  playerHand: Card[],
+  currentHouse: Card[],
+  leadSuit: Card['suit'] | null,
+  trumpSuit: Card['suit'] | null,
+  allowAceShortcut: boolean
+): number[] {
+  if (!leadSuit) return allIndices(playerHand); // safety
 
-  if (currentHouse.length === 0) {
-    // First card of the house - all cards are playable
-    for (let i = 0; i < playerHand.length; i++) {
-      playableIndex.push(i);
-    }
-    return playableIndex;
-  }
-  if (currentHouse.length >= 1 && currentHouse.length < enteredPlayers - 1) {
-    if (playerHand.some(card => card.suit === leadSuit)) {
-      const highestNonTrumpCard = findHighestCardInSuit(currentHouse, leadSuit, trumpSuit);
-      if (playerHand.some(card => card.suit === leadSuit && card.rank === 'A')) {
-        playableIndex.push(playerHand.findIndex(card => card.suit === leadSuit && card.rank === 'A'));
-        return playableIndex;
-      }
-      if (highestNonTrumpCard && playerHand.some(card => card.suit === leadSuit && card.value > highestNonTrumpCard.value)) {
-        playerHand.forEach((card, index) => {
-          if (card.suit === leadSuit && card.value > highestNonTrumpCard.value) {
-            playableIndex.push(index);
-          }
-        });
-        return playableIndex;
-      }
-      else{
-        playerHand.forEach((card, index) => {
-          if (card.suit === leadSuit) {
-            playableIndex.push(index);
-          }
-        });
-        return playableIndex;
-      }
-    }
-    else{
-      const highestTrumpCard = findHighestCardInSuit(currentHouse, trumpSuit, null);
-      if(!highestTrumpCard){
-        if(playerHand.some(card => card.suit === trumpSuit)){
-          playerHand.forEach((card, index) => {
-            if (card.suit === trumpSuit) {
-              playableIndex.push(index);
-            }
-          });
-        }
-        else{
-          playerHand.forEach((card, index) => {
-              playableIndex.push(index);
-          });
-        }
-        return playableIndex;
-      }
-      if(playerHand.some(card => card.suit === trumpSuit)){
-        if(findHighestCardInSuit(playerHand, trumpSuit, null).value > highestTrumpCard.value){
-          playerHand.forEach((card, index) => {
-            if (card.suit === trumpSuit && card.value > highestTrumpCard.value) {
-              playableIndex.push(index);
-            }
-          });
-          return playableIndex;
-        } else {
-          playerHand.forEach((card, index) => {
-            if (card.suit === trumpSuit) {
-              playableIndex.push(index);
-            }
-          });
-          return playableIndex;
-        }
-      } else {
-        playerHand.forEach((card, index) => {
-          playableIndex.push(index);
-        });
-        return playableIndex;
-      }
-    }
+  // Optional “Ace shortcut” (only in the mid-turn branch per original code)
+  if (allowAceShortcut) {
+    const aceIdx = firstAceIndexInSuit(playerHand, leadSuit);
+    if (aceIdx !== -1) return [aceIdx];
   }
 
-  if (currentHouse.length === enteredPlayers - 1) {
-    // Has lead suit
-    if (playerHand.some(card => card.suit === leadSuit)) {
-      const highestNonTrumpCard = findHighestCardInSuit(currentHouse, leadSuit, trumpSuit);
-      if (highestNonTrumpCard && playerHand.some(card => card.suit === leadSuit && card.value > highestNonTrumpCard.value)) {
-        playerHand.forEach((card, index) => {
-          if (card.suit === leadSuit && card.value > highestNonTrumpCard.value) {
-            playableIndex.push(index);
-          }
-        });
-        return playableIndex;
-      }
-      else{
-        playerHand.forEach((card, index) => {
-          if (card.suit === leadSuit) {
-            playableIndex.push(index);
-          }
-        });
-        return playableIndex;
-      }
-    }
-    // No lead suit
-    else{
-      const highestTrumpCard = findHighestCardInSuit(currentHouse, trumpSuit, null);
-      if(!highestTrumpCard){
-        if(playerHand.some(card => card.suit === trumpSuit)){
-          playerHand.forEach((card, index) => {
-            if (card.suit === trumpSuit) {
-              playableIndex.push(index);
-            }
-          });
-        }
-        else{
-          playerHand.forEach((card, index) => {
-              playableIndex.push(index);
-          });
-        }
-        return playableIndex;
-      }
-      if(playerHand.some(card => card.suit === trumpSuit)){
-        if(findHighestCardInSuit(playerHand, trumpSuit, null).value > highestTrumpCard.value){
-          playerHand.forEach((card, index) => {
-            if (card.suit === trumpSuit && card.value > highestTrumpCard.value) {
-              playableIndex.push(index);
-            }
-          });
-          return playableIndex;
-        } else {
-          playerHand.forEach((card, index) => {
-            if (card.suit === trumpSuit) {
-              playableIndex.push(index);
-            }
-          });
-          return playableIndex;
-        }
-      } else {
-        playerHand.forEach((card, index) => {
-          playableIndex.push(index);
-        });
-        return playableIndex;
-      }
-    }
-  }
+  // Highest non-trump of the lead suit already on table
+  const highestNonTrumpLead = findHighestCardInSuit(currentHouse, leadSuit, trumpSuit ?? null);
+  const threshold = highestValue(highestNonTrumpLead);
 
-  // Fallback: if no cards were determined to be playable, allow all cards
-  if (playableIndex.length === 0) {
-    for (let i = 0; i < playerHand.length; i++) {
-      playableIndex.push(i);
-    }
+  const canBeat = playerHand.some(c => c.suit === leadSuit && c.value > threshold);
+  if (canBeat) {
+    return higherThanInSuit(playerHand, leadSuit, threshold);
   }
-
-  return playableIndex;
+  // Otherwise, any card in lead suit
+  return suitIndices(playerHand, leadSuit);
 }
 
-export function checkTrumpAce(playerHand: Card[], trumpSuit: Card['suit'] | null, currentHouse: Card[]): boolean {
+/* =========================
+ * Main: findPlayableCards (refactored)
+ * =======================*/
+
+export function findPlayableCards(
+  playerHand: Card[],
+  leadSuit: Card['suit'] | null,
+  trumpSuit: Card['suit'] | null,
+  currentHouse: Card[],
+  enteredPlayers: number
+): number[] {
+  // First card of the house - all cards are playable
+  if (currentHouse.length === 0) return allIndices(playerHand);
+
+  const isLastToPlay = currentHouse.length === enteredPlayers - 1;
+  const canFollowLead = hasSuit(playerHand, leadSuit);
+
+  if (canFollowLead) {
+    // In your original, the “Ace shortcut” exists only when NOT the last player:
+    // (currentHouse.length >= 1 && currentHouse.length < enteredPlayers - 1)
+    const allowAceShortcut =
+      currentHouse.length >= 1 && currentHouse.length < enteredPlayers - 1;
+    return playableWhenHasLeadSuit(
+      playerHand,
+      currentHouse,
+      leadSuit,
+      trumpSuit,
+      allowAceShortcut && !isLastToPlay
+    );
+  }
+
+  // Cannot follow lead suit → apply trump/overtrump rules (same for mid-turn and last)
+  return playableWhenNoLeadSuit(playerHand, currentHouse, trumpSuit);
+}
+
+/* =========================
+ * Misc helpers you already export
+ * =======================*/
+
+export function checkTrumpAce(
+  playerHand: Card[],
+  trumpSuit: Card['suit'] | null,
+  currentHouse: Card[]
+): boolean {
   const trumpAce = playerHand.find(card => card.suit === trumpSuit && card.rank === 'A');
-
-  if (currentHouse.length === 0 && trumpAce) {
-    return true;
-  }
+  if (currentHouse.length === 0 && trumpAce) return true;
   return false;
 }
 
-export function findHighestCardInSuit(cards: Card[], suit: Card['suit'] | null, trumpSuit: Card['suit'] | null): Card {
-  const nonTrumpCards = cards.filter(card => card.suit !== trumpSuit);
-  let highest = nonTrumpCards[0];
-
-  for (const card of nonTrumpCards) {
-    if (card.suit === suit && card.value > highest.value) {
-      highest = card;
-    }
+/**
+ * Finds the highest card in a specific suit, excluding trump suit if provided.
+ * NOTE: returns a non-null Card via TS non-null assertion if no candidate exists.
+ * We prefer callers to defensively handle null by using `highestValue(...)`.
+ */
+export function findHighestCardInSuit(
+  cards: Card[],
+  suit: Card['suit'] | null,
+  trumpSuit: Card['suit'] | null
+): Card {
+  const candidates = cards.filter(c => (suit ? c.suit === suit : true) && c.suit !== trumpSuit);
+  if (candidates.length === 0) return null!; // caller should guard with highestValue(...)
+  let highest = candidates[0];
+  for (const card of candidates) {
+    if (card.value > highest.value) highest = card;
   }
   return highest;
 }
 
+/**
+ * Highest card overall, with trump beating non-trump.
+ * (Keeps your original return type & null! behavior for empty arrays.)
+ */
 export function findHighestCard(cards: Card[], trumpSuit: Card['suit'] | null): Card {
   if (cards.length === 0) return null!;
-  
+
   let highest = cards[0];
-  
+
   for (const card of cards) {
     // Trump cards always beat non-trump cards
     if (trumpSuit && card.suit === trumpSuit && highest.suit !== trumpSuit) {
       highest = card;
       continue;
     }
-    
+
     // If both are trump or both are non-trump, compare values
-    if ((trumpSuit && card.suit === trumpSuit && highest.suit === trumpSuit) ||
-        (!trumpSuit || (card.suit !== trumpSuit && highest.suit !== trumpSuit))) {
-      if (card.value > highest.value) {
-        highest = card;
-      }
+    const bothTrump = trumpSuit && card.suit === trumpSuit && highest.suit === trumpSuit;
+    const bothNonTrump = !trumpSuit || (card.suit !== trumpSuit && highest.suit !== trumpSuit);
+    if (bothTrump || bothNonTrump) {
+      if (card.value > highest.value) highest = card;
     }
   }
-  
+
   return highest;
 }
 
-export function calculateScore(initialScore: number, housesBuilt: number, enteredRound: boolean): number {
-  if (!enteredRound) {
-    return initialScore; // No change if didn't enter
-  }
-  
-  if (housesBuilt === 0) {
-    return initialScore + 5; // +5 penalty for entering but building no houses
-  }
-  
+export function calculateScore(
+  initialScore: number,
+  housesBuilt: number,
+  enteredRound: boolean
+): number {
+  if (!enteredRound) return initialScore; // No change if didn't enter
+  if (housesBuilt === 0) return initialScore + 5; // +5 penalty for entering but building no houses
   return initialScore - housesBuilt; // Subtract houses built
 }
