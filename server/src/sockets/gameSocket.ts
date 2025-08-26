@@ -15,17 +15,12 @@ export class GameSocketHandler {
   }
 
   handleConnection(socket: Socket): void {
-    console.log(`Player connected: ${socket.id}`);
-
     // Handle game creation
     socket.on('create_game', (data: { hostName: string; maxPlayers?: number }) => {
-      console.log('Creating game with data:', data);
       const gameId = this.gameManager.createGame(data.hostName, 5); // Always 5 players
-      console.log('Created game with ID:', gameId);
       const game = this.gameManager.getGame(gameId);
       
       if (game) {
-        console.log('Game found after creation, setting up player socket');
         const player = game.players.find(p => !p.isBot); // Find the real player (host)
         if (player) {
           this.playerSockets.set(socket.id, { socket, gameId, playerId: player.id });
@@ -33,20 +28,15 @@ export class GameSocketHandler {
           socket.join(gameId);
           socket.emit('game_created', { gameId, player });
           socket.emit('game_state', this.sanitizeGameState(game, player.id));
-          console.log('Game creation completed successfully');
         }
-      } else {
-        console.log('ERROR: Game not found after creation!');
       }
     });
 
     // Handle joining a game
     socket.on('join_game', (data: { gameId: string; playerName: string }) => {
-      console.log(`Socket join_game request:`, data);
       const player = this.gameManager.joinGame(data.gameId, data.playerName);
       
       if (player) {
-        console.log(`Player joined successfully:`, player.name);
         const game = this.gameManager.getGame(data.gameId);
 
         if (game) {
@@ -61,11 +51,7 @@ export class GameSocketHandler {
           // Trigger bot turn if current player is a bot
           this.gameManager.checkAndTriggerBotTurn(data.gameId);
         }
-        else {
-          console.log('Game not found');
-        }
       } else {
-        console.log(`Failed to join game: ${data.gameId}`);
         socket.emit('join_error', { message: 'Could not join game' });
       }
     });
@@ -333,8 +319,6 @@ export class GameSocketHandler {
         
         // Clean up
         this.playerSockets.delete(socket.id);
-        
-        console.log(`Player disconnected: ${socket.id}`);
       }
     });
 
@@ -394,6 +378,43 @@ export class GameSocketHandler {
       socket.emit('playable_cards', { gameId: data.gameId, playableCards });
     });
 
+    // Handle starting next round
+    socket.on('start_next_round', (data: { gameId: string }) => {
+      const playerSocket = this.playerSockets.get(socket.id);
+      if (!playerSocket) return;
+
+      const game = this.gameManager.getGame(data.gameId);
+      if (!game) return;
+
+      const player = game.players.find(p => p.id === playerSocket.playerId);
+      if (!player?.isHost) return;
+
+      const success = this.gameManager.startNextRound(data.gameId);
+      
+      if (success) {
+        const updatedGame = this.gameManager.getGame(data.gameId);
+        if (updatedGame) {
+          // Broadcast game state to all players
+          socket.to(data.gameId).emit('next_round_started', { 
+            gameId: data.gameId, 
+            roundNumber: updatedGame.roundNumber,
+            trumpCard: updatedGame.trumpCard 
+          });
+          socket.emit('next_round_started', { 
+            gameId: data.gameId, 
+            roundNumber: updatedGame.roundNumber,
+            trumpCard: updatedGame.trumpCard 
+          });
+          
+          // Send updated game state to all players
+          this.broadcastGameState(data.gameId);
+          
+          // Trigger bot turn if current player is a bot
+          this.gameManager.checkAndTriggerBotTurn(data.gameId);
+        }
+      }
+    });
+
     // Handle getting game info (for debugging)
     socket.on('get_game_info', (data: { gameId: string }) => {
       const playerSocket = this.playerSockets.get(socket.id);
@@ -424,7 +445,6 @@ export class GameSocketHandler {
     // Handle getting all games (for debugging)
     socket.on('get_all_games', () => {
       const allGames = this.gameManager.getAllGames();
-      console.log('All available games:', allGames);
       socket.emit('all_games', { games: allGames });
     });
   }

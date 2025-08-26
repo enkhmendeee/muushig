@@ -23,7 +23,7 @@ export class BotManager {
       isDealer: false,
       isMouth: false,
       enteredRound: undefined,
-      isBot: true
+      isBot: true,
     };
   }
 

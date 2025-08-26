@@ -104,20 +104,11 @@ export function canPlayCard(card: Card, leadSuit: Card['suit'] | null, trumpSuit
 export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | null, trumpSuit: Card['suit'] | null, currentHouse: Card[], enteredPlayers: number): number[] {
   const playableIndex: number[] = [];
 
-  console.log(`findPlayableCards debug:`, {
-    handSize: playerHand.length,
-    leadSuit,
-    trumpSuit,
-    currentHouseLength: currentHouse.length,
-    enteredPlayers
-  });
-
   if (currentHouse.length === 0) {
     // First card of the house - all cards are playable
     for (let i = 0; i < playerHand.length; i++) {
       playableIndex.push(i);
     }
-    console.log(`First card of house - all cards playable:`, playableIndex);
     return playableIndex;
   }
   if (currentHouse.length >= 1 && currentHouse.length < enteredPlayers - 1) {
@@ -252,13 +243,11 @@ export function findPlayableCards(playerHand: Card[], leadSuit: Card['suit'] | n
 
   // Fallback: if no cards were determined to be playable, allow all cards
   if (playableIndex.length === 0) {
-    console.log(`No playable cards found, allowing all cards as fallback`);
     for (let i = 0; i < playerHand.length; i++) {
       playableIndex.push(i);
     }
   }
 
-  console.log(`Final playable cards:`, playableIndex);
   return playableIndex;
 }
 

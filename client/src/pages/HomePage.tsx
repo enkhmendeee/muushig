@@ -21,7 +21,6 @@ const HomePage: React.FC<{
   const joinGame = async () => {
     if (!socket || !playerName.trim() || !gameId.trim()) return;
     
-    console.log('Attempting to join game:', { gameId: gameId.trim(), playerName: playerName.trim() });
     setError('');
     setIsJoining(true);
     socket.emit('join_game', { gameId: gameId.trim(), playerName: playerName.trim() });
@@ -29,7 +28,6 @@ const HomePage: React.FC<{
 
   const debugGetAllGames = () => {
     if (!socket) return;
-    console.log('Requesting all games...');
     socket.emit('get_all_games');
   };
 
@@ -37,7 +35,6 @@ const HomePage: React.FC<{
     if (!socket) return;
 
     const handleJoinError = (data: { message: string }) => {
-      console.log('Join error received:', data);
       setError(data.message);
       setIsJoining(false);
     };
@@ -53,7 +50,7 @@ const HomePage: React.FC<{
     };
 
     const handleAllGames = (data: { games: string[] }) => {
-      console.log('All available games:', data.games);
+      // All games received
     };
 
     socket.on('join_error', handleJoinError);

@@ -18,31 +18,25 @@ function App() {
 
     newSocket.on('connect', () => {
       setIsConnected(true);
-      console.log('Connected to server');
     });
 
     newSocket.on('disconnect', () => {
       setIsConnected(false);
-      console.log('Disconnected from server');
     });
 
     newSocket.on('game_created', (data: { gameId: string; player: Player }) => {
       setCurrentPlayer(data.player);
-      console.log('Game created:', data.gameId);
     });
 
     newSocket.on('game_joined', (data: { gameId: string; player: Player }) => {
       setCurrentPlayer(data.player);
-      console.log('Joined game:', data.gameId);
     });
 
     newSocket.on('game_state', (state: GameState) => {
       setGameState(state);
-      console.log('Game state received:', state);
     });
 
     newSocket.on('chat_message', (message: ChatMessage) => {
-      console.log('Chat message received:', message);
       // Update game state with new chat message
       setGameState(prevState => {
         if (!prevState) return prevState;
@@ -54,15 +48,15 @@ function App() {
     });
 
     newSocket.on('dealt_cards', (data: { gameId: string; trumpCard: Card }) => {
-      console.log('Cards dealt, trump card:', data.trumpCard);
+      // Cards dealt
     });
 
     newSocket.on('house_completed', (data: { house: any; winner: Player }) => {
-      console.log('House completed by:', data.winner.name);
+      // House completed
     });
 
     newSocket.on('game_ended', (data: { winner: Player }) => {
-      console.log('Game ended, winner:', data.winner.name);
+      // Game ended
     });
 
     return () => {

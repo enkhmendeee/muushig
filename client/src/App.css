@@ -692,8 +692,6 @@ body {
   cursor: grabbing;
 }
 
-
-
 .hand-card:active {
   cursor: grabbing;
 }
@@ -1180,6 +1178,8 @@ body {
 .card-rank.black, .card-suit.black {
   color: #2c3e50;
 }
+
+
 
 /* Responsive Design */
 @media (max-width: 768px) {
