@@ -24,6 +24,13 @@ export interface HouseCard {
   playerName: string;
 }
 
+export interface House {
+  cards: Card[];
+  winner: string; // player ID
+  suit: Card['suit'];
+  highestCard: Card;
+}
+
 export interface GameState {
   id: string;
   players: Player[];
@@ -35,13 +42,13 @@ export interface GameState {
   roundNumber: number;
   maxPlayers: number;
   currentHouse: HouseCard[];
-  houses: any[];
-  leadSuit: string | null;
+  houses: House[];
+  leadSuit: Card['suit'] | null;
   dealerIndex: number;
   createdAt: string;
   lastActivity: string;
-  events: any[];
-  chatMessages: any[];
+  events: unknown[];
+  chatMessages: ChatMessage[];
 }
 
 

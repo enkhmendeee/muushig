@@ -26,10 +26,7 @@ const HomePage: React.FC<{
     socket.emit('join_game', { gameId: gameId.trim(), playerName: playerName.trim() });
   };
 
-  const debugGetAllGames = () => {
-    if (!socket) return;
-    socket.emit('get_all_games');
-  };
+
 
   useEffect(() => {
     if (!socket) return;
@@ -49,20 +46,16 @@ const HomePage: React.FC<{
       setError('');
     };
 
-    const handleAllGames = (data: { games: string[] }) => {
-      // All games received
-    };
+
 
     socket.on('join_error', handleJoinError);
     socket.on('game_joined', handleGameJoined);
     socket.on('game_created', handleGameCreated);
-    socket.on('all_games', handleAllGames);
 
     return () => {
       socket.off('join_error', handleJoinError);
       socket.off('game_joined', handleGameJoined);
       socket.off('game_created', handleGameCreated);
-      socket.off('all_games', handleAllGames);
     };
   }, [socket]);
 
@@ -115,12 +108,7 @@ const HomePage: React.FC<{
             >
               {isJoining ? 'Joining...' : 'Join Game'}
             </button>
-            <button 
-              onClick={debugGetAllGames} 
-              className="debug-btn"
-            >
-              Debug: Get All Games
-            </button>
+
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Player } from '../../types/game';
+import { Player, Card } from '../../types/game';
 import { getSuitSymbol } from '../../utils/gameUtils';
 
 interface PlayerHandProps {
@@ -53,7 +53,7 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
     <div className="player-hand-new">
       <div className="hand-cards">
         {Array.isArray(player.hand) ? cardOrder.map((originalIndex, displayIndex) => {
-          const card = (player.hand as any[])[originalIndex];
+          const card = (player.hand as Card[])[originalIndex];
           // Skip rendering if card doesn't exist (was played)
           if (!card) return null;
           return (

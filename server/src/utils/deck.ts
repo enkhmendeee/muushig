@@ -217,15 +217,7 @@ export function findPlayableCards(
  * Misc helpers you already export
  * =======================*/
 
-export function checkTrumpAce(
-  playerHand: Card[],
-  trumpSuit: Card['suit'] | null,
-  currentHouse: Card[]
-): boolean {
-  const trumpAce = playerHand.find(card => card.suit === trumpSuit && card.rank === 'A');
-  if (currentHouse.length === 0 && trumpAce) return true;
-  return false;
-}
+
 
 /**
  * Finds the highest card in a specific suit, excluding trump suit if provided.

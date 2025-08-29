@@ -1,14 +1,23 @@
 import React from 'react';
 import { GameState, Player } from '../../types/game';
 import { getSuitSymbol } from '../../utils/gameUtils';
+import PlayerHand from './PlayerHand';
 
 interface GameTableProps {
   gameState: GameState;
   currentPlayer: Player;
   canPlayCard: boolean;
   playableCards: number[];
+  selectedCardsForExchange: number[];
+  cardOrder: number[];
+  draggedCardIndex: number | null;
   onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, dropIndex: number) => void;
   onDropToPlay: (e: React.DragEvent) => void;
+  onDragStart: (e: React.DragEvent, cardIndex: number) => void;
+  onDragEnd: () => void;
+  onCardSelectForExchange: (cardIndex: number) => void;
+  onPlayCard: (cardIndex: number) => void;
   botActionMessage: string;
 }
 
@@ -17,8 +26,16 @@ const GameTable: React.FC<GameTableProps> = ({
   currentPlayer,
   canPlayCard,
   playableCards,
+  selectedCardsForExchange,
+  cardOrder,
+  draggedCardIndex,
   onDragOver,
+  onDrop,
   onDropToPlay,
+  onDragStart,
+  onDragEnd,
+  onCardSelectForExchange,
+  onPlayCard,
   botActionMessage
 }) => {
   const actualPlayerIndex = gameState.players.findIndex(player => player.id === currentPlayer.id);
@@ -179,34 +196,21 @@ const GameTable: React.FC<GameTableProps> = ({
               </div>
 
               {/* Player Hand */}
-              <div className="player-hand-new">
-                {isCurrentPlayer ? (
-                  // Show actual cards for current player
-                  <div className="hand-cards">
-                    {Array.isArray(player.hand) ? player.hand.map((card, cardIndex) => (
-                      <div key={`${card.suit}-${card.rank}-${cardIndex}`} className="card hand-card">
-                        <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
-                          {card.rank}
-                        </span>
-                        <span className={`card-suit ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>
-                          {getSuitSymbol(card.suit)}
-                        </span>
-                      </div>
-                    )) : (
-                      <div className="card-count">{player.hand} cards</div>
-                    )}
-                  </div>
-                ) : (
-                  // Show card backs for other players
-                  <div className="opponent-cards">
-                    {Array.isArray(player.hand) ? player.hand.map((_, cardIndex) => (
-                      <div key={`${player.id}-card-back-${cardIndex}`} className="card card-back"></div>
-                    )) : (
-                      <div className="card-count">{player.hand} cards</div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <PlayerHand
+                player={player}
+                isCurrentPlayer={isCurrentPlayer}
+                canPlayCard={canPlayCard}
+                playableCards={playableCards}
+                selectedCardsForExchange={selectedCardsForExchange}
+                cardOrder={cardOrder}
+                draggedCardIndex={draggedCardIndex}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
+                onDragEnd={onDragEnd}
+                onCardSelectForExchange={onCardSelectForExchange}
+                onPlayCard={onPlayCard}
+              />
 
               {/* Player Status */}
               <div className="player-status-new">

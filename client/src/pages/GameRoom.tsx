@@ -7,6 +7,7 @@ import GameControls from '../components/game/GameControls';
 import ChatPanel from '../components/game/ChatPanel';
 import ExchangeModal from '../components/game/ExchangeModal';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
+import { useBotMessage } from '../hooks/useBotMessage';
 
 const GameRoom: React.FC<{
   socket: Socket | null;
@@ -20,8 +21,9 @@ const GameRoom: React.FC<{
   const [selectedCardsForExchange, setSelectedCardsForExchange] = useState<number[]>([]);
   const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [isTrumpExchange, setIsTrumpExchange] = useState(false);
-  const [botActionMessage, setBotActionMessage] = useState<string>('');
   const [cardOrder, setCardOrder] = useState<number[]>([]);
+  
+  const { botActionMessage, showBotMessage, clearBotMessage } = useBotMessage();
 
   const prevPlayersRef = React.useRef(gameState.players);
   
@@ -30,8 +32,12 @@ const GameRoom: React.FC<{
 
   // Use drag and drop hook
   const {
+    draggedCardIndex,
+    handleDragStart,
     handleDragOver,
+    handleDrop,
     handleDropToPlay,
+    handleDragEnd,
   } = useDragAndDrop();
 
   // Initialize card order when hand changes
@@ -39,7 +45,7 @@ const GameRoom: React.FC<{
     if (Array.isArray(updatedCurrentPlayer.hand)) {
       // Filter out indices that no longer exist in the hand
       setCardOrder(prevOrder => {
-        const handArray = updatedCurrentPlayer.hand as any[];
+        const handArray = Array.isArray(updatedCurrentPlayer.hand) ? updatedCurrentPlayer.hand : [];
         const newOrder = prevOrder.filter(index => index < handArray.length);
         // Add any new indices that might have been added
         for (let i = 0; i < handArray.length; i++) {
@@ -77,9 +83,9 @@ const GameRoom: React.FC<{
     const currentPlayer = gameState.players[gameState.currentPlayerIndex];
     if (currentPlayer?.isBot) {
       // Clear any existing bot action message when a new bot starts thinking
-      setBotActionMessage('');
+      clearBotMessage();
     }
-  }, [gameState.currentPlayerIndex, gameState.players]);
+  }, [gameState.currentPlayerIndex, gameState.players, clearBotMessage]);
 
   // Track when bots make decisions
   useEffect(() => {
@@ -93,12 +99,7 @@ const GameRoom: React.FC<{
           prevPlayer.enteredRound === undefined && 
           player.enteredRound !== undefined) {
         const action = player.enteredRound ? 'entered' : 'declined';
-        setBotActionMessage(`${player.name} ${action} the round`);
-        
-        // Clear the message after 3 seconds
-        setTimeout(() => {
-          setBotActionMessage('');
-        }, 3000);
+        showBotMessage(`${player.name} ${action} the round`);
       }
       
       // Track exchange decisions
@@ -107,17 +108,12 @@ const GameRoom: React.FC<{
           !prevPlayer.hasExchanged && 
           player.hasExchanged) {
         const action = gameState.gamePhase === 'trump_exchanging' ? 'exchanged trump card' : 'exchanged cards';
-        setBotActionMessage(`${player.name} ${action}`);
-        
-        // Clear the message after 3 seconds
-        setTimeout(() => {
-          setBotActionMessage('');
-        }, 3000);
+        showBotMessage(`${player.name} ${action}`);
       }
     });
     
     prevPlayersRef.current = currentPlayers;
-  }, [gameState.players]);
+  }, [gameState.players, showBotMessage]);
 
   const handleReady = () => {
     if (!socket) return;
@@ -257,8 +253,16 @@ const GameRoom: React.FC<{
         currentPlayer={updatedCurrentPlayer}
         canPlayCard={canPlayCard}
         playableCards={playableCards}
+        selectedCardsForExchange={selectedCardsForExchange}
+        cardOrder={cardOrder}
+        draggedCardIndex={draggedCardIndex}
         onDragOver={handleDragOver}
+        onDrop={(e, dropIndex) => handleDrop(e, dropIndex, cardOrder, setCardOrder)}
         onDropToPlay={(e) => handleDropToPlay(e, cardOrder, playableCards, handlePlayCard)}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onCardSelectForExchange={handleCardSelectForExchange}
+        onPlayCard={handlePlayCard}
         botActionMessage={botActionMessage}
       />
 

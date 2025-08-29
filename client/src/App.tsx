@@ -47,17 +47,7 @@ function App() {
       });
     });
 
-    newSocket.on('dealt_cards', (data: { gameId: string; trumpCard: Card }) => {
-      // Cards dealt
-    });
 
-    newSocket.on('house_completed', (data: { house: any; winner: Player }) => {
-      // House completed
-    });
-
-    newSocket.on('game_ended', (data: { winner: Player }) => {
-      // Game ended
-    });
 
     return () => {
       newSocket.close();
