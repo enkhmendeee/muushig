@@ -108,11 +108,20 @@ export class GameManager {
       return false;
     }
 
+    const player = game.players.find(p => p.id === playerId);
+    console.log(`[DEBUG] enterTurn: ${player?.name} (${player?.isBot ? 'BOT' : 'HUMAN'}) attempting to enter`);
+    console.log(`[DEBUG] enterTurn: Game phase: ${game.gamePhase}, Current player index: ${game.currentPlayerIndex}`);
+
     const result = this.playerManager.enterTurn(game, playerId);
     
     if (result) {
+      console.log(`[DEBUG] enterTurn: ${player?.name} successfully entered`);
       // Broadcast state change
       this.broadcastCallback?.(gameId);
+      
+      // Note: checkAndTriggerBotTurn is called from bot handler methods with delay
+    } else {
+      console.log(`[DEBUG] enterTurn: ${player?.name} enter failed`);
     }
     
     return result;
@@ -124,9 +133,13 @@ export class GameManager {
       return false;
     }
 
+    const player = game.players.find(p => p.id === playerId);
+    console.log(`[DEBUG] skipTurn: ${player?.name} (${player?.isBot ? 'BOT' : 'HUMAN'}) attempting to skip`);
+    console.log(`[DEBUG] skipTurn: Game phase: ${game.gamePhase}, Current player index: ${game.currentPlayerIndex}`);
+
     if (!this.gameStateManager.canPlayerDecide(game, playerId)) {
-      const player = game.players.find(p => p.id === playerId);
       if (player) {
+        console.log(`[DEBUG] skipTurn: ${player.name} cannot decline due to auto-entry rules, auto-entering`);
         player.enteredRound = true;
         game.lastActivity = new Date();
         this.nextTurn(game);
@@ -137,8 +150,13 @@ export class GameManager {
     const result = this.playerManager.skipTurn(game, playerId);
     
     if (result) {
+      console.log(`[DEBUG] skipTurn: ${player?.name} successfully skipped`);
       // Broadcast state change
       this.broadcastCallback?.(gameId);
+      
+      // Note: checkAndTriggerBotTurn is called from bot handler methods with delay
+    } else {
+      console.log(`[DEBUG] skipTurn: ${player?.name} skip failed`);
     }
     
     return result;
@@ -155,8 +173,7 @@ export class GameManager {
     if (result) {
       // Broadcast state change
       this.broadcastCallback?.(gameId);
-      // Trigger bot turn if current player is a bot
-      this.checkAndTriggerBotTurn(gameId);
+      // Note: checkAndTriggerBotTurn is called from bot handler methods with delay
     }
     
     return result;
@@ -173,7 +190,7 @@ export class GameManager {
     if (result) {
       // Broadcast state change
       this.broadcastCallback?.(gameId);
-      this.checkAndTriggerBotTurn(gameId);
+      // Note: checkAndTriggerBotTurn is called from bot handler methods with delay
     }
     
     return result;
@@ -204,16 +221,25 @@ export class GameManager {
     if (result) {
       // Check if house is complete
       if (game.currentHouse.length === game.players.filter(p => p.enteredRound).length) {
+        console.log(`[DEBUG] GameManager.playCard: House complete, completing house`);
         this.completeHouse(game);
         this.broadcastCallback?.(gameId);
-        this.checkAndTriggerBotTurn(gameId);
+        // Only trigger bot turn if current player is not a bot (bot calls are handled by bot handler)
+        const currentPlayer = game.players[game.currentPlayerIndex];
+        if (!currentPlayer?.isBot) {
+          this.checkAndTriggerBotTurn(gameId);
+        }
       } else {
         // Move to next player
+        console.log(`[DEBUG] GameManager.playCard: House not complete, moving to next player`);
         this.nextTurn(game);
         // Broadcast state change
         this.broadcastCallback?.(gameId);
-        // Trigger bot turn if next player is a bot
-        this.checkAndTriggerBotTurn(gameId);
+        // Only trigger bot turn if next player is not a bot (bot calls are handled by bot handler)
+        const nextPlayer = game.players[game.currentPlayerIndex];
+        if (!nextPlayer?.isBot) {
+          this.checkAndTriggerBotTurn(gameId);
+        }
       }
 
       // Check if game is finished
@@ -275,11 +301,18 @@ export class GameManager {
   }
 
   private nextTurn(game: GameState): void {
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    console.log(`[DEBUG] nextTurn: Moving from ${currentPlayer?.name} (index ${game.currentPlayerIndex})`);
+    
     // Find next player who has entered
     let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
     while (!game.players[nextIndex].enteredRound) {
       nextIndex = (nextIndex + 1) % game.players.length;
     }
+    
+    const nextPlayer = game.players[nextIndex];
+    console.log(`[DEBUG] nextTurn: Moving to ${nextPlayer?.name} (index ${nextIndex})`);
+    
     game.currentPlayerIndex = nextIndex;
   }
 
@@ -391,7 +424,13 @@ export class GameManager {
     if (!game) return;
 
     const cardIndices = await this.botManager.makeBotDecision(game, botPlayer, 'exchange');
-    this.exchangeCards(gameId, botPlayer.id, cardIndices);
+    
+    // Validate all card indices are valid
+    const validIndices = cardIndices.filter((index: number) => 
+      index >= 0 && Array.isArray(botPlayer.hand) && index < botPlayer.hand.length
+    );
+    
+    this.exchangeCards(gameId, botPlayer.id, validIndices);
     
     // Check for next bot turn after bot exchange
     setTimeout(() => this.checkAndTriggerBotTurn(gameId), 100);
@@ -402,7 +441,7 @@ export class GameManager {
     if (!game) return;
 
     const cardIndex = await this.botManager.makeBotDecision(game, botPlayer, 'trump_exchange');
-    if (cardIndex >= 0) {
+    if (cardIndex >= 0 && Array.isArray(botPlayer.hand) && cardIndex < botPlayer.hand.length) {
       this.exchangeTrump(gameId, botPlayer.id, cardIndex);
     } else {
       // Skip trump exchange
@@ -417,9 +456,21 @@ export class GameManager {
     const game = this.games.get(gameId);
     if (!game) return;
 
+    console.log(`[DEBUG] handleBotPlayCard: ${botPlayer.name} bot turn started`);
+    console.log(`[DEBUG] handleBotPlayCard: ${botPlayer.name} current hand:`, {
+      length: botPlayer.hand.length,
+      hand: botPlayer.hand.map((card, i) => `${i}:${card?.rank}${card?.suit}`)
+    });
+
     const cardIndex = await this.botManager.makeBotDecision(game, botPlayer, 'play');
-    if (cardIndex >= 0) {
+    console.log(`[DEBUG] handleBotPlayCard: ${botPlayer.name} bot decision returned card index: ${cardIndex}`);
+    
+    if (cardIndex >= 0 && Array.isArray(botPlayer.hand) && cardIndex < botPlayer.hand.length) {
+      console.log(`[DEBUG] handleBotPlayCard: ${botPlayer.name} playing card at index ${cardIndex}`);
       this.playCard(gameId, botPlayer.id, cardIndex);
+    } else {
+      // If bot can't play a valid card, skip turn (shouldn't happen in normal gameplay)
+      console.warn(`[DEBUG] handleBotPlayCard: ${botPlayer.name} couldn't play a valid card, skipping turn. cardIndex: ${cardIndex}, handLength: ${botPlayer.hand?.length}`);
     }
     
     // Check for next bot turn after bot plays card
@@ -431,15 +482,22 @@ export class GameManager {
     if (!game) return;
 
     const currentPlayer = game.players[game.currentPlayerIndex];
+    console.log(`[DEBUG] checkAndTriggerBotTurn: Current player: ${currentPlayer?.name} (${currentPlayer?.isBot ? 'BOT' : 'HUMAN'})`);
+    console.log(`[DEBUG] checkAndTriggerBotTurn: Game phase: ${game.gamePhase}, Current player index: ${game.currentPlayerIndex}`);
+    
     if ((game.gamePhase === 'exchanging' || game.gamePhase === 'trump_exchanging') && !currentPlayer.enteredRound) {
+      console.log(`[DEBUG] checkAndTriggerBotTurn: Skipping ${currentPlayer?.name} - not entered round in exchange phase`);
       this.nextTurn(game);
     }
     
     if (currentPlayer?.isBot) {
+      console.log(`[DEBUG] checkAndTriggerBotTurn: Triggering bot turn for ${currentPlayer.name}`);
       // Broadcast state change before bot starts thinking
       this.broadcastCallback?.(gameId);
       // Trigger bot turn asynchronously
       this.handleBotTurn(gameId);
+    } else {
+      console.log(`[DEBUG] checkAndTriggerBotTurn: ${currentPlayer?.name} is not a bot, no action needed`);
     }
   }
 }

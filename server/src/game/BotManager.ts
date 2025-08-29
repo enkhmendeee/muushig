@@ -70,7 +70,14 @@ export class BotManager {
   }
 
   private decideCardToPlay(game: GameState, botPlayer: Player): number {
+    console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} starting card selection`);
+    console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} hand:`, {
+      length: botPlayer.hand.length,
+      hand: botPlayer.hand.map((card, i) => `${i}:${card?.rank}${card?.suit}`)
+    });
+
     if (!Array.isArray(botPlayer.hand) || botPlayer.hand.length === 0) {
+      console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} has no valid hand`);
       return -1;
     }
 
@@ -83,13 +90,43 @@ export class BotManager {
       game.players.filter(p => p.enteredRound).length
     );
 
+    console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} playable cards:`, {
+      playableIndices: playableCards,
+      playableCards: playableCards.map(i => `${i}:${botPlayer.hand[i]?.rank}${botPlayer.hand[i]?.suit}`),
+      leadSuit: game.leadSuit,
+      trumpSuit: game.trumpCard?.suit,
+      currentHouse: game.currentHouse.map(hc => `${hc.playerName}:${hc.card.rank}${hc.card.suit}`)
+    });
+
     if (playableCards.length === 0) {
+      console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} no playable cards found`);
       return -1;
     }
 
     // Randomly select from playable cards
     const randomIndex = Math.floor(Math.random() * playableCards.length);
-    return playableCards[randomIndex];
+    const selectedCardIndex = playableCards[randomIndex];
+    
+    console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} selected card index: ${selectedCardIndex} (random choice from ${playableCards.length} options)`);
+    
+    // Validate the selected card index is still valid
+    if (selectedCardIndex >= 0 && selectedCardIndex < botPlayer.hand.length) {
+      console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} returning valid card index: ${selectedCardIndex}`);
+      return selectedCardIndex;
+    }
+    
+    console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} selected index ${selectedCardIndex} is invalid, trying fallback`);
+    
+    // Fallback: return the first valid playable card
+    for (const index of playableCards) {
+      if (index >= 0 && index < botPlayer.hand.length) {
+        console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} fallback to valid index: ${index}`);
+        return index;
+      }
+    }
+    
+    console.log(`[DEBUG] decideCardToPlay: ${botPlayer.name} no valid fallback found`);
+    return -1;
   }
 
   private decideTrumpExchange(game: GameState, botPlayer: Player): number {
@@ -113,9 +150,14 @@ export class BotManager {
         const lowestTrump = trumpCards.reduce((lowest, current) => 
           current.card.value < lowest.card.value ? current : lowest
         , trumpCards[0]);
-        return lowestTrump.index;
+        
+        // Validate the index is still valid
+        if (lowestTrump.index >= 0 && lowestTrump.index < botPlayer.hand.length) {
+          return lowestTrump.index;
+        }
       }
-      return 0; // Fallback to first card
+      // Fallback to first valid card
+      return botPlayer.hand.length > 0 ? 0 : -1;
     }
 
     // Find the lowest power non-trump card
@@ -123,7 +165,19 @@ export class BotManager {
       current.card.value < lowest.card.value ? current : lowest
     , nonTrumpCards[0]);
     
-    return lowestNonTrump.index;
+    // Validate the index is still valid
+    if (lowestNonTrump.index >= 0 && lowestNonTrump.index < botPlayer.hand.length) {
+      return lowestNonTrump.index;
+    }
+    
+    // Fallback to first valid non-trump card
+    for (const { index } of nonTrumpCards) {
+      if (index >= 0 && index < botPlayer.hand.length) {
+        return index;
+      }
+    }
+    
+    return -1;
   }
 
   // Get a bot player to replace when a real player joins

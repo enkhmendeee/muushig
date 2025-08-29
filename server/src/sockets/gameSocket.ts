@@ -222,6 +222,7 @@ export class GameSocketHandler {
           // Game starts after trump exchange
           socket.to(data.gameId).emit('game_started');
           socket.emit('game_started');
+          this.gameManager.checkAndTriggerBotTurn(data.gameId);
         }
       } else {
         socket.emit('trump_exchange_error', { message: 'Cannot exchange trump card' });
@@ -374,7 +375,16 @@ export class GameSocketHandler {
       const playerSocket = this.playerSockets.get(socket.id);
       if (!playerSocket) return;
 
+      const game = this.gameManager.getGame(data.gameId);
+      const player = game?.players.find(p => p.id === playerSocket.playerId);
+      
+      console.log(`[DEBUG] Socket: get_playable_cards requested by ${player?.name || 'unknown'}`);
+      console.log(`[DEBUG] Socket: Game state - phase: ${game?.gamePhase}, currentHouse length: ${game?.currentHouse.length}, leadSuit: ${game?.leadSuit}`);
+
       const playableCards = this.gameManager.playableCards(data.gameId, playerSocket.playerId);
+      
+      console.log(`[DEBUG] Socket: Sending playable cards to ${player?.name}:`, playableCards);
+      
       socket.emit('playable_cards', { gameId: data.gameId, playableCards });
     });
 
@@ -450,12 +460,13 @@ export class GameSocketHandler {
 
   private sanitizeGameState(game: GameState, playerId: string): any {
     // Return game state with other players' hands hidden and dates converted to strings
-    return {
-      id: game.id,
-      players: game.players.map(player => ({
+    const sanitizedPlayers = game.players.map(player => {
+      const handInfo = player.id === playerId ? player.hand : player.hand.length;
+      
+      return {
         id: player.id,
         name: player.name,
-        hand: player.id === playerId ? player.hand : player.hand.length, // Only show hand count for other players
+        hand: handInfo, // Only show hand count for other players
         score: player.score,
         isHost: player.isHost,
         isReady: player.isReady,
@@ -464,7 +475,12 @@ export class GameSocketHandler {
         enteredRound: player.enteredRound,
         hasExchanged: player.hasExchanged,
         isBot: player.isBot
-      })),
+      };
+    });
+    
+    return {
+      id: game.id,
+      players: sanitizedPlayers,
       currentPlayerIndex: game.currentPlayerIndex,
       deck: game.deck,
       tree: game.tree,

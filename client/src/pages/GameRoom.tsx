@@ -66,7 +66,7 @@ const GameRoom: React.FC<{
     if (socket && gameState.gamePhase === 'playing' && isMyTurn) {
       socket.emit('get_playable_cards', { gameId: gameState.id });
     }
-  }, [socket, gameState.gamePhase, gameState.currentPlayerIndex, updatedCurrentPlayer.id]);
+  }, [socket, gameState.gamePhase, gameState.currentPlayerIndex, updatedCurrentPlayer.id, gameState.currentHouse.length]);
 
   useEffect(() => {
     if (!socket) return;
@@ -81,6 +81,18 @@ const GameRoom: React.FC<{
       socket.off('playable_cards');
     };
   }, [socket, gameState.id, currentPlayer.name]);
+
+  // Track playable cards state changes
+  useEffect(() => {
+    const isMyTurn = gameState.players[gameState.currentPlayerIndex]?.id === updatedCurrentPlayer.id;
+    console.log(`[DEBUG] GameRoom: Playable cards state changed:`, {
+      playableCards: playableCards,
+      currentPlayer: updatedCurrentPlayer.name,
+      isMyTurn: isMyTurn,
+      gamePhase: gameState.gamePhase,
+      currentHouseLength: gameState.currentHouse.length
+    });
+  }, [playableCards, updatedCurrentPlayer.name, gameState.players, gameState.currentPlayerIndex, updatedCurrentPlayer.id, gameState.gamePhase, gameState.currentHouse.length]);
 
   // Track bot decisions and show notifications
   useEffect(() => {

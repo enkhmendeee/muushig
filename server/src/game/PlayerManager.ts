@@ -133,25 +133,34 @@ export class PlayerManager {
 
   skipTurn(game: GameState, playerId: string): boolean {
     if (game.gamePhase !== 'dealing') {
+      console.log(`[DEBUG] PlayerManager.skipTurn: Wrong game phase: ${game.gamePhase}`);
       return false;
     }
 
     const player = game.players.find(p => p.id === playerId);
     if (!player) {
+      console.log(`[DEBUG] PlayerManager.skipTurn: Player not found: ${playerId}`);
       return false;
     }
+
+    console.log(`[DEBUG] PlayerManager.skipTurn: ${player.name} skipping turn`);
+    console.log(`[DEBUG] PlayerManager.skipTurn: Players decided so far:`, game.players.map(p => `${p.name}: ${p.enteredRound}`));
 
     player.enteredRound = false;
     game.lastActivity = new Date();
 
     if (game.players.every(p => p.enteredRound !== undefined)) {
       // All players decided, move to exchanging phase
+      console.log(`[DEBUG] PlayerManager.skipTurn: All players decided, moving to exchanging phase`);
       game.gamePhase = 'exchanging';
       // Start with player after dealer for exchanging
       game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length;
+      console.log(`[DEBUG] PlayerManager.skipTurn: Set current player to: ${game.players[game.currentPlayerIndex].name} (index: ${game.currentPlayerIndex})`);
     } else {
       // Move to next undecided player
+      console.log(`[DEBUG] PlayerManager.skipTurn: Moving to next undecided player`);
       this.nextTurnEnter(game);
+      console.log(`[DEBUG] PlayerManager.skipTurn: Next player: ${game.players[game.currentPlayerIndex].name} (index: ${game.currentPlayerIndex})`);
     }
 
     return true;
@@ -204,58 +213,94 @@ export class PlayerManager {
 
   exchangeTrump(game: GameState, playerId: string, cardIndex: number): boolean {
     if (game.gamePhase !== 'trump_exchanging') {
+      console.log(`[DEBUG] exchangeTrump: Wrong game phase: ${game.gamePhase}`);
       return false;
     }
 
     const player = game.players.find(p => p.id === playerId);
     if (!player || !player.enteredRound || !player.isDealer || !game.trumpCard) {
+      console.log(`[DEBUG] exchangeTrump: Invalid player or conditions. Player: ${player?.name}, enteredRound: ${player?.enteredRound}, isDealer: ${player?.isDealer}, trumpCard: ${!!game.trumpCard}`);
       return false;
     }
 
+    console.log(`[DEBUG] exchangeTrump: ${player.name} exchanging trump card. cardIndex: ${cardIndex}`);
+
     // Handle skip trump exchange (cardIndex = -1)
     if (cardIndex === -1) {
+      console.log(`[DEBUG] exchangeTrump: ${player.name} skipping trump exchange`);
       player.hasExchanged = true;
       game.lastActivity = new Date();
       
       game.gamePhase = 'playing';
-      this.nextTurn(game);
+      console.log(`[DEBUG] exchangeTrump: Moving to playing phase, setting first player`);
+      this.setNextPlayerFirstTurn(game);
+      console.log(`[DEBUG] exchangeTrump: First player set to: ${game.players[game.currentPlayerIndex].name} (index: ${game.currentPlayerIndex})`);
       return true;
     }
 
     if (cardIndex < 0 || cardIndex >= player.hand.length) {
+      console.log(`[DEBUG] exchangeTrump: Invalid card index: ${cardIndex}, hand length: ${player.hand.length}`);
       return false;
     }
 
     // Exchange the card with trump card
+    console.log(`[DEBUG] exchangeTrump: ${player.name} exchanging card at index ${cardIndex} with trump card`);
     player.hand[cardIndex] = game.trumpCard;
     
     player.hasExchanged = true;
     game.lastActivity = new Date();
     
     game.gamePhase = 'playing';
-    this.nextTurn(game);
+    console.log(`[DEBUG] exchangeTrump: Moving to playing phase, setting first player`);
+    this.setNextPlayerFirstTurn(game);
+    console.log(`[DEBUG] exchangeTrump: First player set to: ${game.players[game.currentPlayerIndex].name} (index: ${game.currentPlayerIndex})`);
 
     return true;
   }
 
   playCard(game: GameState, playerId: string, cardIndex: number): boolean {
     if (game.gamePhase !== 'playing') {
+      console.log(`[DEBUG] playCard: Game phase is ${game.gamePhase}, not 'playing'`);
       return false;
     }
 
     const player = game.players.find(p => p.id === playerId);
     if (!player || !player.enteredRound || game.players[game.currentPlayerIndex].id !== playerId) {
+      console.log(`[DEBUG] playCard: Invalid player or turn. Player: ${player?.name}, enteredRound: ${player?.enteredRound}, currentPlayer: ${game.players[game.currentPlayerIndex]?.name}`);
       return false;
     }
 
-    if (cardIndex < 0 || cardIndex >= player.hand.length) {
+    // Validate and fix hand before playing
+    this.validateAndFixHand(game, player);
+
+    console.log(`[DEBUG] playCard: ${player.name} (${player.isBot ? 'BOT' : 'HUMAN'}) attempting to play card at index ${cardIndex}`);
+    console.log(`[DEBUG] playCard: ${player.name} hand before playing:`, {
+      handLength: player.hand.length,
+      hand: player.hand.map((card, i) => `${i}:${card?.rank}${card?.suit}`)
+    });
+
+    if (!Array.isArray(player.hand) || cardIndex < 0 || cardIndex >= player.hand.length) {
+      console.log(`[DEBUG] playCard: Invalid card index. Hand is array: ${Array.isArray(player.hand)}, cardIndex: ${cardIndex}, hand length: ${player.hand?.length}`);
       return false;
     }
 
     const card = player.hand[cardIndex];
+    if (!card) {
+      console.log(`[DEBUG] playCard: No card found at index ${cardIndex}`);
+      return false;
+    }
 
-    // Play the card
+    console.log(`[DEBUG] playCard: ${player.name} playing ${card.rank}${card.suit} at index ${cardIndex}`);
+
+    // Play the card by removing it from hand
     player.hand.splice(cardIndex, 1);
+    
+    console.log(`[DEBUG] playCard: ${player.name} hand after playing:`, {
+      handLength: player.hand.length,
+      hand: player.hand.map((card, i) => `${i}:${card?.rank}${card?.suit}`)
+    });
+    
+    // Add to current house
     game.currentHouse.push({
       card,
       playerId: player.id,
@@ -271,10 +316,11 @@ export class PlayerManager {
 
     // Check if house is complete
     if (game.currentHouse.length === game.players.filter(p => p.enteredRound).length) {
+      console.log(`[DEBUG] playCard: House complete! Current house:`, game.currentHouse.map(hc => `${hc.playerName}:${hc.card.rank}${hc.card.suit}`));
       // House is complete, will be handled by GameStateManager
     } else {
-      // Move to next player
-      this.nextTurn(game);
+      console.log(`[DEBUG] playCard: House not complete. ${game.currentHouse.length}/${game.players.filter(p => p.enteredRound).length} cards played`);
+      // Note: Turn progression is handled by GameManager.playCard(), not here
     }
 
     return true;
@@ -304,18 +350,27 @@ export class PlayerManager {
   }
 
   private setNextPlayerFirstTurn(game: GameState): void {
+    console.log(`[DEBUG] setNextPlayerFirstTurn: Starting first player selection`);
+    console.log(`[DEBUG] setNextPlayerFirstTurn: Dealer index: ${game.dealerIndex}, Dealer: ${game.players[game.dealerIndex].name}`);
+    console.log(`[DEBUG] setNextPlayerFirstTurn: Players entered status:`, game.players.map((p, i) => `${i}:${p.name}:${p.enteredRound}`));
+    
     // Set current player to first player who entered, starting from player after dealer
     let firstEnteredPlayerIndex = -1;
     for (let i = 1; i <= game.players.length; i++) {
       const playerIndex = (game.dealerIndex + i) % game.players.length;
       const player = game.players[playerIndex];
+      console.log(`[DEBUG] setNextPlayerFirstTurn: Checking player ${player.name} (index ${playerIndex}): enteredRound = ${player.enteredRound}`);
       if (player.enteredRound) {
         firstEnteredPlayerIndex = playerIndex;
+        console.log(`[DEBUG] setNextPlayerFirstTurn: Found first entered player: ${player.name} (index ${playerIndex})`);
         break;
       }
     }
     if (firstEnteredPlayerIndex !== -1) {
       game.currentPlayerIndex = firstEnteredPlayerIndex;
+      console.log(`[DEBUG] setNextPlayerFirstTurn: Set current player to: ${game.players[firstEnteredPlayerIndex].name} (index ${firstEnteredPlayerIndex})`);
+    } else {
+      console.log(`[DEBUG] setNextPlayerFirstTurn: No entered players found!`);
     }
   }
 
@@ -325,12 +380,20 @@ export class PlayerManager {
   }
 
   private nextTurn(game: GameState): void {
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    console.log(`[DEBUG] nextTurn: Moving from ${currentPlayer?.name} (index ${game.currentPlayerIndex})`);
+    console.log(`[DEBUG] nextTurn: Players entered status:`, game.players.map((p, i) => `${i}:${p.name}:${p.enteredRound}`));
+    
     // Find next player who has entered
     let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
     while (!game.players[nextIndex].enteredRound) {
+      console.log(`[DEBUG] nextTurn: Skipping ${game.players[nextIndex].name} (index ${nextIndex}) - not entered`);
       nextIndex = (nextIndex + 1) % game.players.length;
     }
     game.currentPlayerIndex = nextIndex;
+    
+    const nextPlayer = game.players[nextIndex];
+    console.log(`[DEBUG] nextTurn: Moving to ${nextPlayer?.name} (index ${nextIndex})`);
   }
 
   private nextTurnExchange(game: GameState): void {
@@ -343,7 +406,57 @@ export class PlayerManager {
   }
 
   private nextTurnEnter(game: GameState): void {
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    console.log(`[DEBUG] nextTurnEnter: Moving from ${currentPlayer?.name} (index ${game.currentPlayerIndex})`);
+    
     let nextIndex = (game.currentPlayerIndex + 1) % game.players.length;
     game.currentPlayerIndex = nextIndex;
+    
+    const nextPlayer = game.players[nextIndex];
+    console.log(`[DEBUG] nextTurnEnter: Moving to ${nextPlayer?.name} (index ${nextIndex})`);
+  }
+
+  private validateAndFixHand(game: GameState, player: Player): void {
+    console.log(`[DEBUG] validateAndFixHand: ${player.name} (${player.isBot ? 'BOT' : 'HUMAN'}) - Starting validation`);
+    console.log(`[DEBUG] validateAndFixHand: Initial hand:`, {
+      isArray: Array.isArray(player.hand),
+      length: player.hand?.length,
+      hand: player.hand
+    });
+
+    if (!Array.isArray(player.hand)) {
+      console.log(`[DEBUG] validateAndFixHand: ${player.name} hand was not an array, initializing to empty array`);
+      player.hand = [];
+    }
+    
+    // Remove any null/undefined cards
+    const originalLength = player.hand.length;
+    player.hand = player.hand.filter(card => card && typeof card === 'object');
+    const filteredLength = player.hand.length;
+    
+    if (originalLength !== filteredLength) {
+      console.log(`[DEBUG] validateAndFixHand: ${player.name} removed ${originalLength - filteredLength} null/undefined cards`);
+    }
+    
+    // Ensure hand size is exactly 5 cards during playing phase
+    if (game.gamePhase === 'playing') {
+      console.log(`[DEBUG] validateAndFixHand: ${player.name} in playing phase, ensuring 5 cards. Current: ${player.hand.length}, Tree: ${game.tree.length}`);
+      
+      if (player.hand.length > 5) {
+        console.log(`[DEBUG] validateAndFixHand: ${player.name} hand too large (${player.hand.length}), trimming to 5`);
+        player.hand = player.hand.slice(0, 5);
+      } else if (player.hand.length < 5 && game.tree.length > 0) {
+        const needed = 5 - player.hand.length;
+        const available = Math.min(needed, game.tree.length);
+        console.log(`[DEBUG] validateAndFixHand: ${player.name} hand too small (${player.hand.length}), drawing ${available} cards from tree`);
+        const additionalCards = game.tree.splice(0, available);
+        player.hand.push(...additionalCards);
+      }
+    }
+    
+    console.log(`[DEBUG] validateAndFixHand: ${player.name} final hand:`, {
+      length: player.hand.length,
+      hand: player.hand.map((card, i) => `${i}:${card?.rank}${card?.suit}`)
+    });
   }
 }

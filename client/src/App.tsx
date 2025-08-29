@@ -3,7 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import './App.css';
 import HomePage from './pages/HomePage';
 import GameRoom from './pages/GameRoom';
-import { Player, Card, GameState, ChatMessage } from './types/game';
+import { Player, GameState, ChatMessage } from './types/game';
 
 // Main App Component
 function App() {

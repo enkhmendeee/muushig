@@ -33,6 +33,16 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
   onCardSelectForExchange,
   onPlayCard
 }) => {
+  // Debug logging for playable cards
+  if (isCurrentPlayer && canPlayCard) {
+    console.log(`[DEBUG] PlayerHand: ${player.name} playable cards:`, {
+      playableCards: playableCards,
+      handLength: Array.isArray(player.hand) ? player.hand.length : 'not array',
+      canPlayCard: canPlayCard,
+      isCurrentPlayer: isCurrentPlayer
+    });
+  }
+
   if (!isCurrentPlayer) {
     // Show card backs for other players
     return (
@@ -59,6 +69,8 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
           
           const isSelectedForExchange = selectedCardsForExchange.includes(originalIndex);
           const isPlayable = playableCards.includes(originalIndex);
+          
+          console.log(`[DEBUG] PlayerHand: Card ${originalIndex} (${card.rank}${card.suit}) - isPlayable: ${isPlayable}, isSelectedForExchange: ${isSelectedForExchange}`);
           
           return (
             <button 

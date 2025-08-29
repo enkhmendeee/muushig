@@ -189,17 +189,33 @@ export function findPlayableCards(
   currentHouse: Card[],
   enteredPlayers: number
 ): number[] {
+  console.log(`[DEBUG] findPlayableCards: Starting analysis`);
+  console.log(`[DEBUG] findPlayableCards: Current house length: ${currentHouse.length}`);
+  console.log(`[DEBUG] findPlayableCards: Lead suit: ${leadSuit}`);
+  console.log(`[DEBUG] findPlayableCards: Trump suit: ${trumpSuit}`);
+  console.log(`[DEBUG] findPlayableCards: Entered players: ${enteredPlayers}`);
+  console.log(`[DEBUG] findPlayableCards: Player hand:`, playerHand.map((card, i) => `${i}:${card?.rank}${card?.suit}`));
+
   // First card of the house - all cards are playable
-  if (currentHouse.length === 0) return allIndices(playerHand);
+  if (currentHouse.length === 0) {
+    console.log(`[DEBUG] findPlayableCards: First card of house - all cards playable`);
+    const allIndices = Array.from({ length: playerHand.length }, (_, i) => i);
+    console.log(`[DEBUG] findPlayableCards: Returning all indices:`, allIndices);
+    return allIndices;
+  }
 
   const isLastToPlay = currentHouse.length === enteredPlayers - 1;
   const canFollowLead = hasSuit(playerHand, leadSuit);
 
+  console.log(`[DEBUG] findPlayableCards: Is last to play: ${isLastToPlay}`);
+  console.log(`[DEBUG] findPlayableCards: Can follow lead: ${canFollowLead}`);
+
   if (canFollowLead) {
-    // In your original, the “Ace shortcut” exists only when NOT the last player:
+    // In your original, the "Ace shortcut" exists only when NOT the last player:
     // (currentHouse.length >= 1 && currentHouse.length < enteredPlayers - 1)
     const allowAceShortcut =
       currentHouse.length >= 1 && currentHouse.length < enteredPlayers - 1;
+    console.log(`[DEBUG] findPlayableCards: Can follow lead suit, allowAceShortcut: ${allowAceShortcut}`);
     return playableWhenHasLeadSuit(
       playerHand,
       currentHouse,
@@ -210,6 +226,7 @@ export function findPlayableCards(
   }
 
   // Cannot follow lead suit → apply trump/overtrump rules (same for mid-turn and last)
+  console.log(`[DEBUG] findPlayableCards: Cannot follow lead suit, applying trump/overtrump rules`);
   return playableWhenNoLeadSuit(playerHand, currentHouse, trumpSuit);
 }
 
