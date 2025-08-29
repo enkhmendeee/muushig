@@ -21,7 +21,6 @@ export class BotManager {
       hasExchanged: false,
       housesBuilt: 0,
       isDealer: false,
-      isMouth: false,
       enteredRound: undefined,
       isBot: true,
     };

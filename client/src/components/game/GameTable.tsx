@@ -165,7 +165,7 @@ const GameTable: React.FC<GameTableProps> = ({
               <div className="player-avatar">
                 {player.isHost && <span className="crown">👑</span>}
                 {player.isDealer && <span className="dealer-icon">🎯</span>}
-                {player.isMouth && <span className="mouth-icon">👄</span>}
+                {(gameState.dealerIndex + 1) % gameState.players.length === index && <span className="mouth-icon">👄</span>}
                 {player.isBot && <span className="bot-icon">🤖</span>}
                 <div className="avatar-icon">
                   {player.name.charAt(0).toUpperCase()}

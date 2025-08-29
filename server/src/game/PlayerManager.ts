@@ -12,7 +12,6 @@ export class PlayerManager {
       isReady: false,
       housesBuilt: 0,
       isDealer: false,
-      isMouth: false,
       enteredRound: undefined,
       hasExchanged: false,
       isBot: false,
@@ -123,7 +122,7 @@ export class PlayerManager {
     if (game.players.every(p => p.enteredRound !== undefined)) {
       // All players decided, move to exchanging phase
       game.gamePhase = 'exchanging';
-      // Start with mouth player for exchanging
+      // Start with player after dealer for exchanging
       game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length;
     } else {
       // Move to next undecided player
@@ -148,7 +147,7 @@ export class PlayerManager {
     if (game.players.every(p => p.enteredRound !== undefined)) {
       // All players decided, move to exchanging phase
       game.gamePhase = 'exchanging';
-      // Start with mouth player for exchanging
+      // Start with player after dealer for exchanging
       game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length;
     } else {
       // Move to next undecided player

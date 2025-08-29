@@ -381,6 +381,9 @@ export class GameManager {
     } else {
       this.skipTurn(gameId, botPlayer.id);
     }
+    
+    // Check for next bot turn after bot decision
+    setTimeout(() => this.checkAndTriggerBotTurn(gameId), 100);
   }
 
   private async handleBotExchange(gameId: string, botPlayer: Player): Promise<void> {
@@ -389,6 +392,9 @@ export class GameManager {
 
     const cardIndices = await this.botManager.makeBotDecision(game, botPlayer, 'exchange');
     this.exchangeCards(gameId, botPlayer.id, cardIndices);
+    
+    // Check for next bot turn after bot exchange
+    setTimeout(() => this.checkAndTriggerBotTurn(gameId), 100);
   }
 
   private async handleBotTrumpExchange(gameId: string, botPlayer: Player): Promise<void> {
@@ -402,6 +408,9 @@ export class GameManager {
       // Skip trump exchange
       this.exchangeTrump(gameId, botPlayer.id, -1);
     }
+    
+    // Check for next bot turn after bot trump exchange
+    setTimeout(() => this.checkAndTriggerBotTurn(gameId), 100);
   }
 
   private async handleBotPlayCard(gameId: string, botPlayer: Player): Promise<void> {
@@ -412,6 +421,9 @@ export class GameManager {
     if (cardIndex >= 0) {
       this.playCard(gameId, botPlayer.id, cardIndex);
     }
+    
+    // Check for next bot turn after bot plays card
+    setTimeout(() => this.checkAndTriggerBotTurn(gameId), 100);
   }
   // Check if current player is a bot and trigger bot turn
   checkAndTriggerBotTurn(gameId: string): void {

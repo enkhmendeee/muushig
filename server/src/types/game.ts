@@ -8,7 +8,6 @@ export interface Player {
   hasExchanged: boolean;
   housesBuilt: number;
   isDealer: boolean;
-  isMouth: boolean;
   enteredRound: boolean | undefined;
   isBot: boolean; // New field to identify bot players
 }

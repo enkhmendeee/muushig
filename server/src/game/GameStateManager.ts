@@ -17,7 +17,6 @@ export class GameStateManager {
         isReady: false,
         housesBuilt: 0,
         isDealer: false,
-        isMouth: false,
         enteredRound: undefined,
         hasExchanged: false,
         isBot: false,
@@ -65,9 +64,8 @@ export class GameStateManager {
     game.tree = remainingDeck; // All remaining cards go to tree
     game.trumpCard = trumpCard;
     game.gamePhase = 'dealing';
-    game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length; // Start with mouth player
+    game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length; // Start with player after dealer
     game.lastActivity = new Date();
-    game.players[(game.dealerIndex + 1) % game.players.length].isMouth = true;
     game.players[game.dealerIndex].isDealer = true;
   }
 
@@ -80,7 +78,6 @@ export class GameStateManager {
       player.hasExchanged = false;
       player.isReady = false;
       player.isDealer = false;
-      player.isMouth = false;
     });
 
     // Increment dealer

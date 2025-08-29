@@ -429,7 +429,6 @@ export class GameSocketHandler {
             id: p.id,
             name: p.name,
             isDealer: p.isDealer,
-            isMouth: p.isMouth,
             enteredRound: p.enteredRound,
             hasExchanged: p.hasExchanged,
             housesBuilt: p.housesBuilt
@@ -462,7 +461,6 @@ export class GameSocketHandler {
         isReady: player.isReady,
         housesBuilt: player.housesBuilt,
         isDealer: player.isDealer,
-        isMouth: player.isMouth,
         enteredRound: player.enteredRound,
         hasExchanged: player.hasExchanged,
         isBot: player.isBot
