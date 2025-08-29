@@ -56,27 +56,31 @@ const PlayerHand: React.FC<PlayerHandProps> = ({
           const card = (player.hand as Card[])[originalIndex];
           // Skip rendering if card doesn't exist (was played)
           if (!card) return null;
+          
+          const isSelectedForExchange = selectedCardsForExchange.includes(originalIndex);
+          const isPlayable = playableCards.includes(originalIndex);
+          
           return (
             <button 
               key={`${card.suit}-${card.rank}-${originalIndex}-${displayIndex}`}
-              className={`card hand-card ${playableCards.includes(originalIndex) ? 'playable' : ''} ${
+              className={`card hand-card ${isPlayable ? 'playable' : ''} ${
                 canPlayCard ? 'my-turn' : ''
-              } ${selectedCardsForExchange.includes(originalIndex) ? 'selected-for-exchange' : ''} ${
+              } ${isSelectedForExchange ? 'selected-for-exchange' : ''} ${
                 draggedCardIndex === displayIndex ? 'dragging' : ''
               }`}
-              draggable={canPlayCard ? playableCards.includes(originalIndex) : true}
+              draggable={canPlayCard ? isPlayable : true}
               onDragStart={(e) => onDragStart(e, displayIndex)}
               onDragOver={onDragOver}
               onDrop={(e) => onDrop(e, displayIndex)}
               onDragEnd={onDragEnd}
               onClick={() => {
-                if (canPlayCard && playableCards.includes(originalIndex)) {
+                if (canPlayCard && isPlayable) {
                   onPlayCard(originalIndex);
                 } else {
                   onCardSelectForExchange(originalIndex);
                 }
               }}
-              disabled={canPlayCard && !playableCards.includes(originalIndex)}
+              disabled={canPlayCard && !isPlayable}
               aria-label={`Play ${card.rank} of ${card.suit}`}
             >
               <span className={`card-rank ${card.suit === 'hearts' || card.suit === 'diamonds' ? 'red' : 'black'}`}>

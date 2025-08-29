@@ -7,13 +7,13 @@ interface GameControlsProps {
   canMakeDecision: boolean;
   canExchange: boolean;
   canExchangeTrump: boolean;
+  selectedCardsForExchange: number[];
   onReady: () => void;
   onUnready: () => void;
   onStartGame: () => void;
   onEnterTurn: () => void;
   onSkipTurn: () => void;
-  onOpenExchange: () => void;
-  onOpenTrumpExchange: () => void;
+  onExchangeCards: () => void;
   onSkipExchange: () => void;
   onSkipTrumpExchange: () => void;
 }
@@ -24,13 +24,13 @@ const GameControls: React.FC<GameControlsProps> = ({
   canMakeDecision,
   canExchange,
   canExchangeTrump,
+  selectedCardsForExchange,
   onReady,
   onUnready,
   onStartGame,
   onEnterTurn,
   onSkipTurn,
-  onOpenExchange,
-  onOpenTrumpExchange,
+  onExchangeCards,
   onSkipExchange,
   onSkipTrumpExchange
 }) => {
@@ -58,10 +58,11 @@ const GameControls: React.FC<GameControlsProps> = ({
       {canExchange && (
         <div className="exchange-controls">
           <button 
-            onClick={onOpenExchange}
+            onClick={onExchangeCards}
+            disabled={selectedCardsForExchange.length === 0 || selectedCardsForExchange.length > gameState.tree.length}
             className="exchange-btn"
           >
-            Exchange Cards ({gameState.tree.length} available)
+            Exchange {selectedCardsForExchange.length} Cards (max {gameState.tree.length})
           </button>
           <button onClick={onSkipExchange} className="skip-exchange-btn">
             Skip Exchange
@@ -72,10 +73,11 @@ const GameControls: React.FC<GameControlsProps> = ({
       {canExchangeTrump && (
         <div className="exchange-controls">
           <button 
-            onClick={onOpenTrumpExchange}
+            onClick={onExchangeCards}
+            disabled={selectedCardsForExchange.length !== 1}
             className="exchange-btn"
           >
-            Exchange Trump Card
+            Exchange {selectedCardsForExchange.length} Card with Trump
           </button>
           <button onClick={onSkipTrumpExchange} className="skip-exchange-btn">
             Skip Trump Exchange

@@ -5,7 +5,6 @@ import GameHeader from '../components/layout/GameHeader';
 import GameTable from '../components/game/GameTable';
 import GameControls from '../components/game/GameControls';
 import ChatPanel from '../components/game/ChatPanel';
-import ExchangeModal from '../components/game/ExchangeModal';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { useBotMessage } from '../hooks/useBotMessage';
 
@@ -19,8 +18,6 @@ const GameRoom: React.FC<{
   const [playableCards, setPlayableCards] = useState<number[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [selectedCardsForExchange, setSelectedCardsForExchange] = useState<number[]>([]);
-  const [showExchangeModal, setShowExchangeModal] = useState(false);
-  const [isTrumpExchange, setIsTrumpExchange] = useState(false);
   const [cardOrder, setCardOrder] = useState<number[]>([]);
   
   const { botActionMessage, showBotMessage, clearBotMessage } = useBotMessage();
@@ -57,6 +54,13 @@ const GameRoom: React.FC<{
       });
     }
   }, [updatedCurrentPlayer.hand]);
+
+  // Clear selected cards when exchange phase changes
+  useEffect(() => {
+    if (gameState.gamePhase !== 'exchanging' && gameState.gamePhase !== 'trump_exchanging') {
+      setSelectedCardsForExchange([]);
+    }
+  }, [gameState.gamePhase]);
 
   useEffect(() => {
     if (socket && gameState.gamePhase === 'playing' && isMyTurn) {
@@ -151,7 +155,7 @@ const GameRoom: React.FC<{
         return prev.filter(index => index !== cardIndex);
       }
       
-      if (isTrumpExchange) {
+      if (gameState.gamePhase === 'trump_exchanging') {
         // For trump exchange, only allow one card selection
         return [cardIndex];
       }
@@ -170,7 +174,7 @@ const GameRoom: React.FC<{
   const handleExchangeCards = () => {
     if (!socket || selectedCardsForExchange.length === 0) return;
     
-    if (isTrumpExchange) {
+    if (gameState.gamePhase === 'trump_exchanging') {
       // For trump exchange, only exchange the first selected card
       socket.emit('exchange_trump', { 
         gameId: gameState.id, 
@@ -191,38 +195,18 @@ const GameRoom: React.FC<{
     }
     
     setSelectedCardsForExchange([]);
-    setShowExchangeModal(false);
-    setIsTrumpExchange(false);
   };
 
   const handleSkipExchange = () => {
     if (!socket) return;
-    
-    if (isTrumpExchange) {
-      socket.emit('exchange_trump', { gameId: gameState.id, cardIndex: -1 });
-    } else {
-      socket.emit('exchange_cards', { gameId: gameState.id, cardIndices: [] });
-    }
-    
-    setShowExchangeModal(false);
-    setIsTrumpExchange(false);
-  };
-
-  const handleOpenExchange = () => {
-    setIsTrumpExchange(false);
+    socket.emit('exchange_cards', { gameId: gameState.id, cardIndices: [] });
     setSelectedCardsForExchange([]);
-    setShowExchangeModal(true);
-  };
-
-  const handleOpenTrumpExchange = () => {
-    setIsTrumpExchange(true);
-    setSelectedCardsForExchange([]);
-    setShowExchangeModal(true);
   };
 
   const handleSkipTrumpExchange = () => {
     if (!socket) return;
     socket.emit('exchange_trump', { gameId: gameState.id, cardIndex: -1 });
+    setSelectedCardsForExchange([]);
   };
 
   const handleSendChat = () => {
@@ -272,26 +256,15 @@ const GameRoom: React.FC<{
         canMakeDecision={canMakeDecision}
         canExchange={canExchange}
         canExchangeTrump={canExchangeTrump}
+        selectedCardsForExchange={selectedCardsForExchange}
         onReady={handleReady}
         onUnready={handleUnready}
         onStartGame={handleStartGame}
         onEnterTurn={handleEnterTurn}
         onSkipTurn={handleSkipTurn}
-        onOpenExchange={handleOpenExchange}
-        onOpenTrumpExchange={handleOpenTrumpExchange}
-        onSkipExchange={handleSkipExchange}
-        onSkipTrumpExchange={handleSkipTrumpExchange}
-      />
-
-      <ExchangeModal
-        showExchangeModal={showExchangeModal}
-        isTrumpExchange={isTrumpExchange}
-        gameState={gameState}
-        currentPlayer={updatedCurrentPlayer}
-        selectedCardsForExchange={selectedCardsForExchange}
-        onCardSelectForExchange={handleCardSelectForExchange}
         onExchangeCards={handleExchangeCards}
         onSkipExchange={handleSkipExchange}
+        onSkipTrumpExchange={handleSkipTrumpExchange}
       />
 
       <ChatPanel
