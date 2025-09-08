@@ -119,6 +119,43 @@ const GameTable: React.FC<GameTableProps> = ({
             </div>
           )}
 
+          {/* House Completed Overlay */}
+          {gameState.currentHouse.length === gameState.players.filter(p => p.enteredRound).length && gameState.currentHouse.length > 0 && (
+            <div className="house-completed-overlay">
+              <div className="house-completed-message">
+                <div className="house-completed-title">House Complete!</div>
+                {(() => {
+                  // Find the winner of this house
+                  const trumpSuit = gameState.trumpCard?.suit || null;
+                  const cards = gameState.currentHouse.map(hc => hc.card);
+                  const highestCard = cards.reduce((highest, card) => {
+                    if (card.suit === trumpSuit && highest.suit !== trumpSuit) return card;
+                    if (card.suit === highest.suit && highest.suit !== trumpSuit) {
+                      return ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'].indexOf(card.rank) > 
+                             ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'].indexOf(highest.rank) ? card : highest;
+                    }
+                    if (card.suit === trumpSuit && highest.suit === trumpSuit) {
+                      return ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'].indexOf(card.rank) > 
+                             ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'].indexOf(highest.rank) ? card : highest;
+                    }
+                    return highest;
+                  });
+                  
+                  const winningHouseCard = gameState.currentHouse.find(hc => 
+                    hc.card.suit === highestCard.suit && hc.card.rank === highestCard.rank
+                  );
+                  
+                  return winningHouseCard ? (
+                    <div className="house-winner">
+                      {winningHouseCard.playerName} wins with {highestCard.rank}{highestCard.suit === 'hearts' ? '♥' : highestCard.suit === 'diamonds' ? '♦' : highestCard.suit === 'clubs' ? '♣' : '♠'}
+                    </div>
+                  ) : null;
+                })()}
+                <div className="house-completed-subtitle">Moving to next house...</div>
+              </div>
+            </div>
+          )}
+
           {/* Completed Houses */}
           {gameState.houses.length > 0 && (
             <div className="completed-houses">

@@ -98,7 +98,7 @@ export class GameStateManager {
     game.trumpCard = null;
     game.currentHouse = [];
     game.leadSuit = null;
-    game.currentPlayerIndex = 0;
+    game.currentPlayerIndex = (game.dealerIndex + 1) % game.players.length;
   }
 
   completeHouse(game: GameState): void {
@@ -131,18 +131,22 @@ export class GameStateManager {
         };
         
         game.houses.push(house);
+        
+        // Store the winner for the next house (but don't reset current house yet)
+        game.currentPlayerIndex = game.players.findIndex(p => p.id === winner.id);
       }
-
-      // Reset for next house
-      console.log(`[DEBUG] completeHouse: Resetting for next house`);
-      console.log(`[DEBUG] completeHouse: Before reset - currentHouse length: ${game.currentHouse.length}, leadSuit: ${game.leadSuit}`);
-      
-      game.currentHouse = [];
-      game.leadSuit = null;
-      game.currentPlayerIndex = game.players.findIndex(p => p.id === winner?.id);
-      
-      console.log(`[DEBUG] completeHouse: After reset - currentHouse length: ${game.currentHouse.length}, leadSuit: ${game.leadSuit}, currentPlayerIndex: ${game.currentPlayerIndex}`);
     }
+  }
+
+  resetHouseForNextRound(game: GameState): void {
+    console.log(`[DEBUG] resetHouseForNextRound: Resetting for next house`);
+    console.log(`[DEBUG] resetHouseForNextRound: Before reset - currentHouse length: ${game.currentHouse.length}, leadSuit: ${game.leadSuit}`);
+    
+    // Reset for next house
+    game.currentHouse = [];
+    game.leadSuit = null;
+    
+    console.log(`[DEBUG] resetHouseForNextRound: After reset - currentHouse length: ${game.currentHouse.length}, leadSuit: ${game.leadSuit}, currentPlayerIndex: ${game.currentPlayerIndex}`);
   }
 
   endGame(game: GameState): void {

@@ -222,13 +222,30 @@ export class GameManager {
       // Check if house is complete
       if (game.currentHouse.length === game.players.filter(p => p.enteredRound).length) {
         console.log(`[DEBUG] GameManager.playCard: House complete, completing house`);
+        
+        // Complete the house first
         this.completeHouse(game);
+        
+        // Emit house completed event immediately
         this.broadcastCallback?.(gameId);
-        // Only trigger bot turn if current player is not a bot (bot calls are handled by bot handler)
-        const currentPlayer = game.players[game.currentPlayerIndex];
-        if (!currentPlayer?.isBot) {
-          this.checkAndTriggerBotTurn(gameId);
-        }
+        
+        // Add delay before moving to next house
+        setTimeout(() => {
+          console.log(`[DEBUG] GameManager.playCard: Delay finished, moving to next house`);
+          
+          // Reset the house for the next round
+          this.gameStateManager.resetHouseForNextRound(game);
+          
+          // Broadcast state change
+          this.broadcastCallback?.(gameId);
+          
+          // Only trigger bot turn if next player is not a bot (bot calls are handled by bot handler)
+          const nextPlayer = game.players[game.currentPlayerIndex];
+          if (nextPlayer?.isBot) {
+            this.checkAndTriggerBotTurn(gameId);
+          }
+        }, 2000); // 2 second delay
+        
       } else {
         // Move to next player
         console.log(`[DEBUG] GameManager.playCard: House not complete, moving to next player`);
@@ -237,7 +254,7 @@ export class GameManager {
         this.broadcastCallback?.(gameId);
         // Only trigger bot turn if next player is not a bot (bot calls are handled by bot handler)
         const nextPlayer = game.players[game.currentPlayerIndex];
-        if (!nextPlayer?.isBot) {
+        if (nextPlayer?.isBot) {
           this.checkAndTriggerBotTurn(gameId);
         }
       }
@@ -254,7 +271,6 @@ export class GameManager {
 
   private completeHouse(game: GameState): void {
     this.gameStateManager.completeHouse(game);
-    this.broadcastCallback?.(game.id);
   }
 
 

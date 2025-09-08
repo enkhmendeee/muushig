@@ -47,6 +47,10 @@ function App() {
       });
     });
 
+    newSocket.on('house_completed', (data: { house: any; winner: any }) => {
+      console.log('House completed:', data);
+      // You can add visual feedback here if needed
+    });
 
 
     return () => {
