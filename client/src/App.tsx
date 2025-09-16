@@ -5,6 +5,9 @@ import HomePage from './pages/HomePage';
 import GameRoom from './pages/GameRoom';
 import { Player, GameState, ChatMessage } from './types/game';
 
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || "http://localhost:3000";
+
+
 // Main App Component
 function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -13,7 +16,10 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3000');
+    const newSocket = io(SOCKET_URL, {
+      transports: ["websocket", "polling"], // Render works best with both
+      path: "/socket.io",
+    });
     setSocket(newSocket);
 
     newSocket.on('connect', () => {

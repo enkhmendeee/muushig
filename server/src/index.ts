@@ -10,7 +10,8 @@ import { GameSocketHandler } from "./sockets/gameSocket";
 import { createGameRoutes } from "./routes/gameRoutes";
 
 const app = express();
-app.use(cors());
+const allowed = [process.env.CORS_ORIGIN ?? "", "http://localhost:5173", "http://localhost:3000"];
+app.use(cors({ origin: allowed, credentials: true }));
 app.use(express.json());
 
 // Initialize game manager
